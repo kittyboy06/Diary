@@ -17,14 +17,19 @@ const CreateEntry = () => {
     const [image, setImage] = useState(null);
     const [preview, setPreview] = useState(null);
     const [mood, setMood] = useState('happy');
+    const [habits, setHabits] = useState({ exercise: false, water: false, learning: false });
     const [loading, setLoading] = useState(false);
 
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setImage(file);
-            setPreview(URL.createObjectURL(file));
-        }
+    // ...
+
+    const HABITS = [
+        { id: 'exercise', label: 'Exercise', emoji: '🏃‍♂️' },
+        { id: 'water', label: 'Drink Water', emoji: '💧' },
+        { id: 'learning', label: 'Learning', emoji: '📚' },
+    ];
+
+    const toggleHabit = (id) => {
+        setHabits(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
     const MOODS = [
@@ -51,7 +56,8 @@ const CreateEntry = () => {
                 content,
                 imageUrl,
                 isSecret,
-                mood // Use state
+                mood,
+                habits // Submit habits state
             });
 
             navigate('/'); // Or to the log
@@ -89,6 +95,24 @@ const CreateEntry = () => {
                                 title={m.label}
                             >
                                 {m.emoji}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Habit Tracker */}
+                    <div className="flex justify-center flex-wrap gap-4 pb-4 border-b border-neutral-100 dark:border-slate-700">
+                        {HABITS.map((h) => (
+                            <button
+                                key={h.id}
+                                type="button"
+                                onClick={() => toggleHabit(h.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${habits[h.id]
+                                    ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                                    : 'bg-white dark:bg-slate-800 border-neutral-200 dark:border-slate-600 text-neutral-600 dark:text-slate-400 hover:bg-neutral-50 dark:hover:bg-slate-700'
+                                    }`}
+                            >
+                                <span className="text-xl">{h.emoji}</span>
+                                <span className="font-medium text-sm">{h.label}</span>
                             </button>
                         ))}
                     </div>

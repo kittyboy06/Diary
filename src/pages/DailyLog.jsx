@@ -24,6 +24,12 @@ const DailyLog = () => {
         'anxious': '😰'
     };
 
+    const HABITS = [
+        { id: 'exercise', label: 'Exercise', emoji: '🏃‍♂️' },
+        { id: 'water', label: 'Drink Water', emoji: '💧' },
+        { id: 'learning', label: 'Learning', emoji: '📚' },
+    ];
+
     useEffect(() => {
         const fetchEntries = async () => {
             try {
@@ -134,6 +140,18 @@ const DailyLog = () => {
                             <div className="prose prose-neutral dark:prose-invert max-w-none text-neutral-600 dark:text-slate-300">
                                 <p className="whitespace-pre-wrap line-clamp-3">{entry.content}</p>
                             </div>
+
+                            {/* Habits Display */}
+                            {entry.habits && Object.values(entry.habits).some(v => v) && (
+                                <div className="mt-3 flex gap-2">
+                                    {HABITS.filter(h => entry.habits[h.id]).map(h => (
+                                        <div key={h.id} className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-2 py-1 rounded-lg text-xs font-medium border border-green-100 dark:border-green-800">
+                                            <span>{h.emoji}</span>
+                                            <span>{h.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             {entry.imageUrl && (
                                 <div className="mt-4 rounded-xl overflow-hidden h-48 w-full bg-neutral-100 dark:bg-slate-900">

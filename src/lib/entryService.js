@@ -82,6 +82,7 @@ export const addEntry = async (userId, entry) => {
                 image_url: entry.imageUrl,
                 is_secret: entry.isSecret,
                 mood: entry.mood,
+                habits: entry.habits, // New field
                 user_id: userId,
                 date: new Date().toISOString()
             }])
@@ -112,6 +113,7 @@ export const getEntries = async (userId, includeSecret = false) => {
             // Map back to camelCase for app consumption
             imageUrl: d.image_url,
             isSecret: d.is_secret,
+            habits: d.habits || {}, // Default to empty object if null
             date: d.date ? { toDate: () => new Date(d.date) } : null,
         }));
 
