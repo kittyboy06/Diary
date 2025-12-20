@@ -1,0 +1,132 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { addEntry, uploadImage } from '../lib/entryService';
+import { motion } from 'framer-motion';
+import { Save, Image as ImageIcon, Lock, Loader } from 'lucide-react';
+
+const CreateEntry = () => {
+    const { currentUser } = useAuth();
+    const { t } = useLanguage();
+    const navigate = useNavigate();
+
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [isSecret, setIsSecret] = useState(false);
+    const [image, setImage] = useState(null);
+    const [preview, setPreview] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setImage(file);
+            setPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!title && !content) return;
+        setLoading(true);
+
+        try {
+            let imageUrl = null;
+            if (image) {
+                imageUrl = await uploadImage(image, currentUser.id);
+            }
+
+            await addEntry(currentUser.id, {
+                title,
+                content,
+                imageUrl,
+                isSecret,
+                mood: 'happy' // Placeholder
+            });
+
+            navigate('/'); // Or to the log
+        } catch (error) {
+            console.error("Failed to create entry", error);
+            alert("Failed to save entry. Check console.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto"
+        >
+            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-neutral-100 dark:border-slate-700 overflow-hidden">
+                <div className="p-6 border-b border-neutral-100 dark:border-slate-700 bg-neutral-50/50 dark:bg-slate-900/50">
+                    <h1 className="text-2xl font-bold text-neutral-800 dark:text-white">{t('new_entry')}</h1>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    <div>
+                        <input
+                            type="text"
+                            placeholder={t('title_placeholder')}
+                            className="w-full text-xl font-semibold placeholder-neutral-400 dark:placeholder-slate-500 border-none focus:ring-0 p-0 text-neutral-800 dark:text-white bg-transparent"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+
+                    <div>
+                        <textarea
+                            placeholder={t('content_placeholder')}
+                            className="w-full h-64 resize-none text-lg leading-relaxed placeholder-neutral-400 dark:placeholder-slate-500 border-none focus:ring-0 p-0 text-neutral-600 dark:text-slate-300 bg-transparent"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                        />
+                    </div>
+
+                    {preview && (
+                        <div className="relative rounded-xl overflow-hidden shadow-sm">
+                            <img src={preview} alt="Preview" className="w-full h-auto max-h-96 object-cover" />
+                            <button
+                                type="button"
+                                onClick={() => { setImage(null); setPreview(null); }}
+                                className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70"
+                            >
+                                X
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-4 border-t border-neutral-100 dark:border-slate-700">
+                        <div className="flex space-x-4">
+                            <label className="cursor-pointer flex items-center space-x-2 text-neutral-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                <ImageIcon size={20} />
+                                <span className="text-sm font-medium">{t('add_image')}</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                            </label>
+
+                            <label className={`cursor-pointer flex items-center space-x-2 transition-colors ${isSecret ? 'text-rose-500' : 'text-neutral-500 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400'}`}>
+                                <Lock size={20} />
+                                <span className="text-sm font-medium">{isSecret ? t('secret_entry') : t('make_secret')}</span>
+                                <input type="checkbox" className="hidden" checked={isSecret} onChange={(e) => setIsSecret(e.target.checked)} />
+                            </label>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex items-center space-x-2 bg-indigo-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-500/25 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            {loading ? <Loader className="animate-spin" size={20} /> : <Save size={20} />}
+                            <span>{t('save_entry')}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </motion.div>
+    );
+};
+
+export default CreateEntry;
