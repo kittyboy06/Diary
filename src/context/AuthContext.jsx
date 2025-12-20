@@ -33,12 +33,12 @@ export function AuthProvider({ children }) {
         signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
         signOut: () => supabase.auth.signOut(),
         resetPassword: (email) => supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin + '/update-password', // Redirect to a page where they can set new password
+            redirectTo: window.location.origin + window.location.pathname + '#/update-password', // Redirect to update page
         }),
         signInWithGoogle: () => supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin, // Redirect back to home
+                redirectTo: window.location.origin + window.location.pathname, // Redirect back to app root
             }
         }),
     };

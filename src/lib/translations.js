@@ -37,6 +37,7 @@ export const translations = {
         locked_title: "Secret Log Locked",
         set_pin_title: "Set Your Secret PIN",
         locked_msg: "Enter your PIN to access your private entries.",
+        set_pin_msg: "Create a PIN to protect your secret entries.",
         language: "Language",
         edit_profile: "Edit Profile",
         saving: "Saving...",
