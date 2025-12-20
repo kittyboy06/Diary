@@ -14,6 +14,16 @@ const DailyLog = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState('All');
 
+    const MOOD_MAP = {
+        'happy': '😃',
+        'neutral': '😐',
+        'sad': '😔',
+        'angry': '😡',
+        'excited': '🤩',
+        'calm': '😌',
+        'anxious': '😰'
+    };
+
     useEffect(() => {
         const fetchEntries = async () => {
             try {
@@ -107,9 +117,9 @@ const DailyLog = () => {
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h2 className="text-xl font-bold text-neutral-800 dark:text-white">{entry.title || "Untitled"}</h2>
-                                        {entry.mood && (
-                                            <span className="px-2 py-0.5 bg-neutral-100 dark:bg-slate-700 text-neutral-600 dark:text-slate-300 text-xs rounded-full font-medium">
-                                                {entry.mood}
+                                        {entry.mood && MOOD_MAP[entry.mood.toLowerCase()] && (
+                                            <span className="text-xl" title={entry.mood}>
+                                                {MOOD_MAP[entry.mood.toLowerCase()]}
                                             </span>
                                         )}
                                     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getProfile, updateProfile, uploadAvatar, exportData } from '../lib/entryService';
+import { getProfile, updateProfile, uploadAvatar, exportData, getEntries } from '../lib/entryService';
 import { User, Mail, Phone, Camera, Save, X, Download } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import Button from '../components/Button';
@@ -21,12 +21,15 @@ export default function Profile() {
         avatar_url: null,
     });
 
+    const [moodStats, setMoodStats] = useState({});
+
     // Fallback logic for Avatar: Profile DB -> Google Metadata -> Placeholder
     const displayAvatar = profile.avatar_url || currentUser?.user_metadata?.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
 
     useEffect(() => {
         if (currentUser) {
             loadProfile();
+            calculateMoodStats();
         }
     }, [currentUser]);
 
@@ -56,6 +59,22 @@ export default function Profile() {
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const calculateMoodStats = async () => {
+        try {
+            const entries = await getEntries(currentUser.id, true);
+            const stats = {};
+            entries.forEach(e => {
+                if (e.mood) {
+                    const m = e.mood.toLowerCase();
+                    stats[m] = (stats[m] || 0) + 1;
+                }
+            });
+            setMoodStats(stats);
+        } catch (e) {
+            console.error("Error calculating mood stats", e);
         }
     };
 
@@ -120,12 +139,22 @@ export default function Profile() {
         }
     };
 
+    const MOOD_EMOJIS = {
+        'happy': '😃',
+        'neutral': '😐',
+        'sad': '😔',
+        'angry': '😡',
+        'excited': '🤩',
+        'calm': '😌',
+        'anxious': '😰'
+    };
+
     if (loading) return <div className="p-8 text-center text-neutral-500">{t('loading_profile')}</div>;
 
     return (
         <div className="max-w-2xl mx-auto">
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-neutral-100 dark:border-slate-700 overflow-hidden transition-colors">
-                {/* Header / Cover Area - could be a gradient or image */}
+                {/* Header / Cover Area */}
                 <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
 
                 <div className="px-8 pb-8">
@@ -234,6 +263,26 @@ export default function Profile() {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Mood Breakdown */}
+                    <div className="pt-6 border-t border-neutral-100 dark:border-slate-700">
+                        <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-4">{t('mood_analytics') || "Mood Analytics"}</h3>
+                        <div className="flex flex-wrap gap-4">
+                            {Object.entries(moodStats).length > 0 ? (
+                                Object.entries(moodStats).map(([mood, count]) => (
+                                    <div key={mood} className="flex items-center gap-2 bg-neutral-50 dark:bg-slate-900 px-4 py-2 rounded-xl">
+                                        <span className="text-2xl">{MOOD_EMOJIS[mood] || '❓'}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-medium text-neutral-500 dark:text-slate-400 capitalize">{mood}</span>
+                                            <span className="text-lg font-bold text-neutral-800 dark:text-white">{count}</span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-neutral-400 dark:text-slate-500 italic">No mood data yet.</p>
+                            )}
                         </div>
                     </div>
 

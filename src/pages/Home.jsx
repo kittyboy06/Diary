@@ -3,21 +3,26 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getEntryStats } from '../lib/entryService';
+
+import Calendar from '../components/Calendar';
+import { getEntryStats, getEntries } from '../lib/entryService';
 import { Sun, CheckCircle } from 'lucide-react';
 
 const Home = () => {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
     const [stats, setStats] = useState({ streak: 0, totalEntries: 0 });
+    const [entries, setEntries] = useState([]);
 
     useEffect(() => {
         if (currentUser?.id) {
-            const fetchStats = async () => {
-                const data = await getEntryStats(currentUser.id);
-                setStats(data);
+            const fetchData = async () => {
+                const statsData = await getEntryStats(currentUser.id);
+                setStats(statsData);
+                const entriesData = await getEntries(currentUser.id);
+                setEntries(entriesData);
             };
-            fetchStats();
+            fetchData();
         }
     }, [currentUser]);
 
@@ -25,6 +30,38 @@ const Home = () => {
     const hour = new Date().getHours();
     const greetingKey = hour < 12 ? 'greeting_morning' : hour < 18 ? 'greeting_afternoon' : 'greeting_evening';
     const greeting = t(greetingKey);
+
+    // Anime Quotes
+    const QUOTES = [
+        { text: "If you don't fight, you can't win!", author: "Eren Yeager (Attack on Titan)" },
+        { text: "The only thing we're allowed to do is believe that we won't regret the choice we made.", author: "Levi Ackerman (Attack on Titan)" },
+        { text: "A true warrior needs no sword.", author: "Thors (Vinland Saga)" },
+        { text: "It's not about whether you can or can't do it. I'm doing it because I want to.", author: "Shirou Emiya (Fate/stay night)" },
+        { text: "If you want to grant your own wish, then you should clear your own path to it.", author: "Rintarou Okabe (Steins;Gate)" },
+        { text: "Fear is not evil. It tells you what your weakness is. And once you know your weakness, you can become stronger as well as kinder.", author: "Gildarts Clive (Fairy Tail)" },
+        { text: "People, who can't throw something important away, can never hope to change anything.", author: "Armin Arlert (Attack on Titan)" },
+        { text: "Change is what you do when you want to alter reality.", author: "Ichigo Kurosaki (Bleach)" },
+        { text: "If you pick a fight with a god of death, I can't guarantee your soul's safety.", author: "Hei (Darker Than Black)" },
+        { text: "Go beyond! Plus Ultra!", author: "All Might (My Hero Academia)" },
+        { text: "A pro is someone who risks their life!", author: "All Might (My Hero Academia)" },
+        { text: "I have no enemies.", author: "Thorfinn (Vinland Saga)" },
+        { text: "Even the mightiest warriors experience fears. What makes them a true warrior is the courage that they possess to overcome their fears.", author: "Vegeta (Dragon Ball Z)" },
+        { text: "If I don't have to do it, I won't. If I have to do it, I'll make it quick.", author: "Houtarou Oreki (Hyouka)" },
+
+        // Self-Care & Habits (Exercise, Water, Learning)
+        { text: "Take care of your body. It's the only place you have to live.", author: "Jim Rohn" },
+        { text: "Water is the driving force of all nature. Stay hydrated!", author: "Leonardo da Vinci" },
+        { text: "Live as if you were to die tomorrow. Learn as if you were to live forever.", author: "Mahatma Gandhi" },
+        { text: "Exercise to be fit, not skinny. Eat to nourish your body.", author: "Unknown" },
+        { text: "The capacity to learn is a gift; the ability to learn is a skill; the willingness to learn is a choice.", author: "Brian Herbert" },
+        { text: "A healthy outside starts from the inside. Drink your water.", author: "Robert Urich" },
+        { text: "Motivation is what gets you started. Habit is what keeps you going.", author: "Jim Ryun" },
+        { text: "Learning never exhausts the mind.", author: "Leonardo da Vinci" },
+        { text: "Physical fitness is not only one of the most important keys to a healthy body, it is the basis of dynamic and creative intellectual activity.", author: "John F. Kennedy" },
+        { text: "Do something today that your future self will thank you for.", author: "Unknown" }
+    ];
+
+    const [randomQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
     return (
         <div className="space-y-8">
@@ -39,11 +76,11 @@ const Home = () => {
                         {format(new Date(), 'EEEE, MMMM do, yyyy')}
                     </p>
                     <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
-                        {greeting}, {currentUser?.email?.split('@')[0] || 'Friend'}!
+                        {greeting}, {currentUser?.user_metadata?.username || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Friend'}!
                     </h1>
-                    <p className="text-lg opacity-90 max-w-2xl">
-                        "Keep your face always toward the sunshine—and shadows will fall behind you."
-                        <br /><span className="text-sm opacity-75 mt-2 block">— Walt Whitman</span>
+                    <p className="text-lg opacity-90 max-w-2xl italic">
+                        "{randomQuote.text}"
+                        <br /><span className="text-sm opacity-75 mt-2 block not-italic">— {randomQuote.author}</span>
                     </p>
                 </div>
                 {/* Decorative circles */}
@@ -84,8 +121,18 @@ const Home = () => {
                     <p className="text-3xl font-bold text-neutral-900 dark:text-white">{stats.totalEntries}</p>
                     <p className="text-sm text-neutral-500 dark:text-slate-400 mt-1">{t('total_written')}</p>
                 </motion.div>
+
+                {/* Calendar Widget */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="md:col-span-2 lg:col-span-1"
+                >
+                    <Calendar entries={entries} />
+                </motion.div>
             </div>
-        </div>
+        </div >
     );
 };
 

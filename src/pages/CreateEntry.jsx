@@ -16,6 +16,7 @@ const CreateEntry = () => {
     const [isSecret, setIsSecret] = useState(false);
     const [image, setImage] = useState(null);
     const [preview, setPreview] = useState(null);
+    const [mood, setMood] = useState('happy');
     const [loading, setLoading] = useState(false);
 
     const handleImageChange = (e) => {
@@ -25,6 +26,14 @@ const CreateEntry = () => {
             setPreview(URL.createObjectURL(file));
         }
     };
+
+    const MOODS = [
+        { id: 'happy', label: 'Happy', emoji: '😃' },
+        { id: 'neutral', label: 'Neutral', emoji: '😐' },
+        { id: 'sad', label: 'Sad', emoji: '😔' },
+        { id: 'angry', label: 'Angry', emoji: '😡' },
+        { id: 'excited', label: 'Excited', emoji: '🤩' },
+    ];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -42,7 +51,7 @@ const CreateEntry = () => {
                 content,
                 imageUrl,
                 isSecret,
-                mood: 'happy' // Placeholder
+                mood // Use state
             });
 
             navigate('/'); // Or to the log
@@ -66,6 +75,24 @@ const CreateEntry = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {/* Mood Selector */}
+                    <div className="flex justify-center space-x-4 pb-4 border-b border-neutral-100 dark:border-slate-700">
+                        {MOODS.map((m) => (
+                            <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setMood(m.id)}
+                                className={`text-3xl p-3 rounded-2xl transition-all duration-300 ${mood === m.id
+                                    ? 'bg-indigo-100 dark:bg-indigo-900/30 scale-110 shadow-sm'
+                                    : 'hover:bg-neutral-50 dark:hover:bg-slate-700 grayscale hover:grayscale-0 opacity-70 hover:opacity-100'
+                                    }`}
+                                title={m.label}
+                            >
+                                {m.emoji}
+                            </button>
+                        ))}
+                    </div>
+
                     <div>
                         <input
                             type="text"
@@ -113,7 +140,6 @@ const CreateEntry = () => {
                                 <input type="checkbox" className="hidden" checked={isSecret} onChange={(e) => setIsSecret(e.target.checked)} />
                             </label>
                         </div>
-
                         <button
                             type="submit"
                             disabled={loading}
