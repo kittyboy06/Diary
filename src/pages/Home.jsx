@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
 import Calendar from '../components/Calendar';
 import { getEntryStats, getEntries } from '../lib/entryService';
+import { getHabitLogs } from '../lib/habitService';
 import { Sun, CheckCircle } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
 const Home = () => {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
     const [stats, setStats] = useState({ streak: 0, totalEntries: 0 });
     const [entries, setEntries] = useState([]);
+    const [chartData, setChartData] = useState([]);
 
     useEffect(() => {
         if (currentUser?.id) {
@@ -21,6 +24,30 @@ const Home = () => {
                 setStats(statsData);
                 const entriesData = await getEntries(currentUser.id);
                 setEntries(entriesData);
+
+                // Fetch Habit Data for Dashboard Chart
+                const endDate = new Date();
+                const startDate = subDays(endDate, 14);
+                const logs = await getHabitLogs(currentUser.id, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'));
+
+                const processedData = Array.from({ length: 14 }).map((_, i) => {
+                    const date = subDays(new Date(), 13 - i);
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    const log = logs.find(l => l.date === dateStr);
+
+                    let score = 0;
+                    if (log && log.habits) {
+                        if (log.habits.exercise) score += 33;
+                        if (log.habits.water) score += 33;
+                        if (log.habits.learning) score += 34;
+                    }
+
+                    return {
+                        date: format(date, 'dd MMM'),
+                        score
+                    };
+                });
+                setChartData(processedData);
             };
             fetchData();
         }
@@ -130,6 +157,57 @@ const Home = () => {
                     className="md:col-span-2 lg:col-span-1"
                 >
                     <Calendar entries={entries} />
+                </motion.div>
+
+                {/* Productivity Chart Widget */}
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="md:col-span-2 lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-neutral-100 dark:border-slate-700"
+                >
+                    <div className="flex items-center gap-2 mb-4">
+                        <h3 className="font-semibold text-lg text-neutral-800 dark:text-white">Productivity Trend</h3>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">Last 14 Days</span>
+                    </div>
+                    <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData}>
+                                <defs>
+                                    <linearGradient id="colorScoreHome" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis
+                                    dataKey="date"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                                    dy={10}
+                                />
+                                <YAxis hide domain={[0, 100]} />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: '#fff',
+                                        fontSize: '12px'
+                                    }}
+                                    formatter={(value) => [`${Math.round(value)}%`, 'Completion']}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="score"
+                                    stroke="#818cf8"
+                                    strokeWidth={3}
+                                    fillOpacity={1}
+                                    fill="url(#colorScoreHome)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
                 </motion.div>
             </div>
         </div >

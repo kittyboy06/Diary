@@ -1,11 +1,41 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { getProfile, updateProfile, uploadAvatar, exportData, getEntries } from '../lib/entryService';
+import { User, Mail, Phone, Camera, Save, X, Download } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+import Button from '../components/Button';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-export default function Profile() {
-    // ...
-    const [moodStats, setMoodStats] = useState({});
-    const [habitStats, setHabitStats] = useState([]);
+const MOOD_EMOJIS = {
+    'happy': '😃',
+    'neutral': '😐',
+    'sad': '😔',
+    'angry': '😡',
+    'excited': '🤩',
+    'calm': '😌',
+    'anxious': '😰'
+};
 
-    // ...
+export default function Profile() {
+    const { currentUser } = useAuth();
+    const { language, setLanguage, t } = useLanguage();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const [profile, setProfile] = useState({
+        username: '',
+        email: '',
+        gender: '',
+        phone: '',
+        avatar_url: null,
+    });
+
+    const [moodStats, setMoodStats] = useState({});
+
+    // Fallback logic for Avatar
+    const displayAvatar = profile.avatar_url || currentUser?.user_metadata?.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
 
     useEffect(() => {
         if (currentUser) {
@@ -14,7 +44,34 @@ export default function Profile() {
         }
     }, [currentUser]);
 
-    // ...
+    const loadProfile = async () => {
+        try {
+            const { data, error } = await getProfile(currentUser.id);
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error loading profile:', error);
+            }
+            if (data) {
+                setProfile({
+                    username: data.username || '',
+                    email: currentUser.email, // Email from Auth is source of truth
+                    gender: data.gender || '',
+                    phone: data.phone || '',
+                    avatar_url: data.avatar_url || null,
+                });
+            } else {
+                // Initialize with Google data if no profile exists (edge case)
+                setProfile(prev => ({
+                    ...prev,
+                    email: currentUser.email,
+                    username: currentUser.user_metadata?.username || currentUser.user_metadata?.full_name || ''
+                }));
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const calculateStats = async () => {
         try {
@@ -30,22 +87,7 @@ export default function Profile() {
             });
             setMoodStats(mStats);
 
-            // Habit Stats
-            const hStats = { exercise: 0, water: 0, learning: 0 };
-            entries.forEach(e => {
-                if (e.habits) {
-                    if (e.habits.exercise) hStats.exercise++;
-                    if (e.habits.water) hStats.water++;
-                    if (e.habits.learning) hStats.learning++;
-                }
-            });
-
-            const chartData = [
-                { name: 'Exercise', count: hStats.exercise, fill: '#818cf8' },
-                { name: 'Water', count: hStats.water, fill: '#60a5fa' },
-                { name: 'Learning', count: hStats.learning, fill: '#f472b6' },
-            ];
-            setHabitStats(chartData);
+            setMoodStats(mStats);
 
         } catch (e) {
             console.error("Error calculating stats", e);
@@ -111,16 +153,6 @@ export default function Profile() {
             console.error("Export failed:", error);
             alert("Failed to export data.");
         }
-    };
-
-    const MOOD_EMOJIS = {
-        'happy': '😃',
-        'neutral': '😐',
-        'sad': '😔',
-        'angry': '😡',
-        'excited': '🤩',
-        'calm': '😌',
-        'anxious': '😰'
     };
 
     if (loading) return <div className="p-8 text-center text-neutral-500">{t('loading_profile')}</div>;
@@ -260,6 +292,9 @@ export default function Profile() {
                         </div>
                     </div>
 
+                    {/* Habit Analytics */}
+
+
                     {/* Actions Area */}
                     <div className="pt-6 border-t border-neutral-100 dark:border-slate-700 space-y-4">
                         <div className="flex justify-between items-center">
@@ -285,24 +320,6 @@ export default function Profile() {
                             <Download size={18} />
                             {t('export_data')}
                         </Button>
-                    </div>
-
-                    {/* Habit Analytics */}
-                    <div className="pt-6 border-t border-neutral-100 dark:border-slate-700">
-                        <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-4">Habit Consistency</h3>
-                        <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={habitStats}>
-                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                                    <YAxis hide />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }}
-                                        cursor={{ fill: 'transparent' }}
-                                    />
-                                    <Bar dataKey="count" radius={[8, 8, 8, 8]} barSize={40} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
                     </div>
                 </div>
             </div>

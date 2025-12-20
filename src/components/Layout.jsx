@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PenTool, Book, Lock, LogOut, User, Moon, Sun, Menu, X } from 'lucide-react';
+import { Home, PenTool, Book, Lock, LogOut, User, Moon, Sun, Menu, X, Target } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -70,6 +70,7 @@ const Layout = () => {
                     <NavItem to="/" icon={Home} label={t('dashboard')} onClick={closeMobileMenu} />
                     <NavItem to="/create-entry" icon={PenTool} label={t('new_entry')} onClick={closeMobileMenu} />
                     <NavItem to="/daily-log" icon={Book} label={t('daily_log')} onClick={closeMobileMenu} />
+                    <NavItem to="/productivity" icon={Target} label="Productivity" onClick={closeMobileMenu} />
                     <NavItem to="/secret-log" icon={Lock} label={t('secret_log')} onClick={closeMobileMenu} />
                     <NavItem to="/profile" icon={User} label={t('profile')} onClick={closeMobileMenu} />
                 </nav>

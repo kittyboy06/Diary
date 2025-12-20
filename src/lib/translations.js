@@ -53,6 +53,8 @@ export const translations = {
         profile_error: "Error updating profile: ",
         avatar_error: "Error uploading avatar: ",
         loading_profile: "Loading profile...",
+        mood_analytics: "Mood Analytics",
+        habit_consistency: "Habit Consistency",
     },
     ta: {
         app_name: "என் டயரி",
@@ -109,6 +111,8 @@ export const translations = {
         profile_error: "சுயவிவரத்தைப் புதுப்பிப்பதில் பிழை: ",
         avatar_error: "படத்தைப் பதிவேற்றுவதில் பிழை: ",
         loading_profile: "சுயவிவரத்தை ஏற்றுகிறது...",
+        mood_analytics: "மனநிலை பகுப்பாய்வு",
+        habit_consistency: "பழக்கவழக்க",
     },
     ml: {
         app_name: "എന്റെ ഡയറി",
@@ -165,6 +169,8 @@ export const translations = {
         profile_error: "പ്രൊഫൈൽ അപ്‌ഡേറ്റ് ചെയ്യുന്നതിൽ പിശക്: ",
         avatar_error: "അവതാർ അപ്‌ലോഡ് ചെയ്യുന്നതിൽ പിശക്: ",
         loading_profile: "പ്രൊഫൈൽ ലോഡുചെയ്യുന്നു...",
+        mood_analytics: "മൂഡ് അനലിറ്റിക്സ്",
+        habit_consistency: "ശീലങ്ങളുടെ സ്ഥിരത",
     },
     te: {
         app_name: "నా డైరీ",
@@ -221,6 +227,8 @@ export const translations = {
         profile_error: "ప్రొఫైల్ అప్‌డేట్ చేయడంలో లోపం: ",
         avatar_error: "అవతార్ అప్‌లోడ్ చేయడంలో లోపం: ",
         loading_profile: "ప్రొఫైల్ లోడ్ అవుతోంది...",
+        mood_analytics: "మూడ్ విశ్లేషణ",
+        habit_consistency: "అలవాటు స్థిరత్వం",
     },
     kn: {
         app_name: "ನನ್ನ ಡೈರಿ",
@@ -277,5 +285,7 @@ export const translations = {
         profile_error: "ಪ್ರೊಫೈಲ್ ನವೀಕರಿಸುವಲ್ಲಿ ದೋಷ: ",
         avatar_error: "ಅವತಾರ ಅಪ್‌ಲೋಡ್ ಮಾಡುವಲ್ಲಿ ದೋಷ: ",
         loading_profile: "ಪ್ರೊಫೈಲ್ ಲೋಡ್ ಆಗುತ್ತಿದೆ...",
+        mood_analytics: "ಮೂಡ್ ಅನಾಲಿಟಿಕ್ಸ್",
+        habit_consistency: "ಅಭ್ಯಾಸ ಸ್ಥಿರತೆ",
     }
 };

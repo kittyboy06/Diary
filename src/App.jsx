@@ -14,6 +14,7 @@ import CreateEntry from './pages/CreateEntry';
 import DailyLog from './pages/DailyLog';
 import SecretLog from './pages/SecretLog';
 import Profile from './pages/Profile';
+import Productivity from './pages/Productivity';
 
 function App() {
     return (
@@ -34,6 +35,7 @@ function App() {
                                 <Route path="create-entry" element={<CreateEntry />} />
                                 <Route path="daily-log" element={<DailyLog />} />
                                 <Route path="secret-log" element={<SecretLog />} />
+                                <Route path="productivity" element={<Productivity />} />
                                 <Route path="profile" element={<Profile />} />
                             </Route>
                         </Routes>
