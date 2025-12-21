@@ -5,6 +5,7 @@ import { getHabitLogs, logHabit, getTodayHabits } from '../lib/habitService';
 import { Target, Activity, CheckCircle, Flame } from 'lucide-react';
 import { ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis } from 'recharts';
 import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
+import Skeleton from '../components/Skeleton';
 
 export default function Productivity() {
     const { currentUser } = useAuth();
@@ -102,7 +103,38 @@ export default function Productivity() {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-neutral-500">Loading Productivity...</div>;
+    if (loading) {
+        return (
+            <div className="space-y-8 max-w-4xl mx-auto">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 w-64 rounded-xl" />
+                        <Skeleton className="h-4 w-48 rounded-md" />
+                    </div>
+                    <Skeleton className="h-14 w-40 rounded-2xl" />
+                </div>
+
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700">
+                    <Skeleton className="h-6 w-32 mb-6 rounded-md" />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <Skeleton className="h-32 rounded-2xl" />
+                        <Skeleton className="h-32 rounded-2xl" />
+                        <Skeleton className="h-32 rounded-2xl" />
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-neutral-100 dark:border-slate-700">
+                    <div className="flex justify-between mb-8">
+                        <div className="space-y-2">
+                            <Skeleton className="h-6 w-40 rounded-md" />
+                            <Skeleton className="h-4 w-56 rounded-md" />
+                        </div>
+                    </div>
+                    <Skeleton className="h-64 w-full rounded-xl" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">

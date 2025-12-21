@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { addEntry, uploadImage } from '../lib/entryService';
 import { motion } from 'framer-motion';
-import { Save, Image as ImageIcon, Lock, Loader } from 'lucide-react';
+import { Save, Image as ImageIcon, Lock, Loader, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 
 const CreateEntry = () => {
     const { currentUser } = useAuth();
@@ -13,6 +14,7 @@ const CreateEntry = () => {
 
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSecret, setIsSecret] = useState(false);
     const [image, setImage] = useState(null);
     const [preview, setPreview] = useState(null);
@@ -40,12 +42,22 @@ const CreateEntry = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!title && !content) return;
-        setLoading(true);
+        // setLoading(true); // Handled by toast.promise or we can keep it for button state
 
-        try {
+        const savePromise = async () => {
             let imageUrl = null;
             if (image) {
                 imageUrl = await uploadImage(image, currentUser.id);
+            }
+
+            let finalDate = new Date();
+            if (date) {
+                // Parse local date parts from YYYY-MM-DD string
+                const [y, m, d] = date.split('-').map(Number);
+                // Set the date, but keep current time to preserve sorting order for today's entries
+                finalDate.setFullYear(y);
+                finalDate.setMonth(m - 1);
+                finalDate.setDate(d);
             }
 
             await addEntry(currentUser.id, {
@@ -54,16 +66,18 @@ const CreateEntry = () => {
                 imageUrl,
                 isSecret,
                 mood,
-                mood,
+                date: finalDate.toISOString(),
             });
+        };
 
-            navigate('/'); // Or to the log
-        } catch (error) {
-            console.error("Failed to create entry", error);
-            alert("Failed to save entry. Check console.");
-        } finally {
-            setLoading(false);
-        }
+        toast.promise(savePromise(), {
+            loading: 'Saving entry...',
+            success: () => {
+                navigate('/');
+                return 'Entry saved successfully!';
+            },
+            error: 'Failed to save entry'
+        });
     };
 
     return (
@@ -135,9 +149,26 @@ const CreateEntry = () => {
                         <div className="flex space-x-4">
                             <label className="cursor-pointer flex items-center space-x-2 text-neutral-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                                 <ImageIcon size={20} />
-                                <span className="text-sm font-medium">{t('add_image')}</span>
+                                <span className="text-sm font-medium hidden sm:inline">{t('add_image')}</span>
                                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
                             </label>
+
+                            <div
+                                onClick={() => document.getElementById('date-picker').showPicker()}
+                                className="cursor-pointer flex items-center space-x-2 text-neutral-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors relative"
+                            >
+                                <Calendar size={20} />
+                                <span className="text-sm font-medium">
+                                    {date === new Date().toISOString().split('T')[0] ? 'Today' : new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                                <input
+                                    id="date-picker"
+                                    type="date"
+                                    className="absolute inset-0 opacity-0 w-full h-full pointer-events-none"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                />
+                            </div>
 
                             <label className={`cursor-pointer flex items-center space-x-2 transition-colors ${isSecret ? 'text-rose-500' : 'text-neutral-500 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400'}`}>
                                 <Lock size={20} />

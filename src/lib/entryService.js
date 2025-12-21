@@ -82,9 +82,9 @@ export const addEntry = async (userId, entry) => {
                 image_url: entry.imageUrl,
                 is_secret: entry.isSecret,
                 mood: entry.mood,
-                habits: entry.habits, // New field
+                habits: entry.habits,
                 user_id: userId,
-                date: new Date().toISOString()
+                date: entry.date ? new Date(entry.date).toISOString() : new Date().toISOString()
             }])
             .select();
 

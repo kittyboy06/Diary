@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createProfile, getEmailByUsername } from '../lib/entryService';
-
+import { toast } from 'sonner';
 
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/Button';
@@ -10,48 +10,61 @@ export default function Login() {
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [message, setMessage] = useState(''); // For signup confirmation
     const [username, setUsername] = useState('');
     const { signIn, signUp, signInWithGoogle } = useAuth();
     const navigate = useNavigate();
 
     const handleAuth = async (e) => {
         e.preventDefault();
-        setError('');
-        setMessage('');
         try {
             if (isLogin) {
                 // Determine if input is email or username
                 let loginEmail = email.trim();
-                if (!loginEmail.includes('@')) {
-                    // It's a username, fetch email
-                    const { data, error } = await getEmailByUsername(loginEmail);
-                    if (error || !data) throw new Error("Username not found");
-                    loginEmail = data;
-                }
-                const { error } = await signIn(loginEmail, password);
-                if (error) throw error;
-                navigate('/');
+                let isUsername = !loginEmail.includes('@');
+
+                const loginPromise = async () => {
+                    if (isUsername) {
+                        const { data, error } = await getEmailByUsername(loginEmail);
+                        if (error || !data) throw new Error("Username not found");
+                        loginEmail = data;
+                    }
+                    const { error } = await signIn(loginEmail, password);
+                    if (error) throw error;
+                };
+
+                await toast.promise(loginPromise(), {
+                    loading: 'Logging in...',
+                    success: () => {
+                        navigate('/');
+                        return 'Welcome back!';
+                    },
+                    error: (err) => {
+                        let msg = err.message;
+                        if (msg.includes("Invalid login credentials")) {
+                            msg += ". Did you sign up with Google?";
+                        }
+                        return msg;
+                    }
+                });
+
             } else {
                 // Sign Up
-                // Pass username in metadata so the Trigger can pick it up
-                const { data: authData, error } = await signUp(email.trim(), password, {
-                    data: { username: username.trim() }
+                const signUpPromise = async () => {
+                    const { data: authData, error } = await signUp(email.trim(), password, {
+                        data: { username: username.trim() }
+                    });
+                    if (error) throw error;
+                    // Profile creation is handled by DB Trigger
+                };
+
+                await toast.promise(signUpPromise(), {
+                    loading: 'Creating account...',
+                    success: 'Check your email for the confirmation link!',
+                    error: (err) => err.message
                 });
-                if (error) throw error;
-
-                // Profile creation is now handled by Database Trigger 'on_auth_user_created'
-                // No need to call createProfile manually
-
-                setMessage("Check your email for the confirmation link!");
             }
         } catch (err) {
-            let msg = err.message;
-            if (msg.includes("Invalid login credentials")) {
-                msg += ". Did you sign up with Google? Access via Google or reset your password.";
-            }
-            setError(msg);
+            // Error handled by toast.promise
         }
     };
 
@@ -59,8 +72,6 @@ export default function Login() {
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-900 dark:to-slate-800 transition-colors duration-300">
             <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-neutral-100/50 dark:border-slate-700 backdrop-blur-sm transition-colors duration-300">
                 <h2 className="text-3xl font-bold mb-6 text-center text-indigo-900 dark:text-white transition-colors">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
-                {error && <p className="text-red-500 text-sm mb-4 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/30">{error}</p>}
-                {message && <p className="text-green-600 dark:text-green-400 text-sm mb-4 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-900/30">{message}</p>}
                 <form onSubmit={handleAuth} className="space-y-4">
                     {!isLogin && (
                         <div>
@@ -114,13 +125,16 @@ export default function Login() {
 
                     <button
                         type="button"
-                        onClick={async () => {
-                            try {
+                        onClick={() => {
+                            const googleLoginPromise = async () => {
                                 const { error } = await signInWithGoogle();
                                 if (error) throw error;
-                            } catch (err) {
-                                setError(err.message);
-                            }
+                            };
+
+                            toast.promise(googleLoginPromise(), {
+                                loading: 'Redirecting to Google...',
+                                error: (err) => err.message
+                            });
                         }}
                         className="w-full py-3 bg-white dark:bg-slate-700 border border-neutral-200 dark:border-slate-600 text-neutral-700 dark:text-white rounded-lg hover:bg-neutral-50 dark:hover:bg-slate-600 font-medium transition-all flex items-center justify-center gap-2"
                     >
@@ -131,7 +145,7 @@ export default function Login() {
                 <p className="mt-6 text-center text-sm text-neutral-500 dark:text-slate-400">
                     {isLogin ? "Don't have an account? " : "Already have an account? "}
                     <button
-                        onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); }}
+                        onClick={() => { setIsLogin(!isLogin); }}
                         className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
                     >
                         {isLogin ? 'Sign Up' : 'Login'}

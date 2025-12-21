@@ -5,6 +5,7 @@ import { getEntries, deleteEntry } from '../lib/entryService';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Trash2, Lock, Calendar, Search, Filter } from 'lucide-react';
+import Skeleton from '../components/Skeleton';
 
 const DailyLog = () => {
     const { currentUser } = useAuth();
@@ -54,7 +55,37 @@ const DailyLog = () => {
         return matchesSearch && matchesMood;
     });
 
-    if (loading) return <div className="p-10 text-center text-neutral-500">Loading your memories...</div>;
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center mb-8">
+                    <Skeleton className="h-10 w-48 rounded-xl" />
+                    <div className="flex gap-2">
+                        <Skeleton className="h-10 w-64 rounded-xl" />
+                        <Skeleton className="h-10 w-32 rounded-xl" />
+                    </div>
+                </div>
+                <div className="grid gap-6">
+                    {[1, 2, 3].map((i) => (
+                        <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="space-y-2">
+                                    <Skeleton className="h-6 w-48 rounded-md" />
+                                    <Skeleton className="h-4 w-32 rounded-md" />
+                                </div>
+                                <Skeleton className="h-6 w-6 rounded-full" />
+                            </div>
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-3/4" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

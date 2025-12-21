@@ -1,5 +1,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -19,6 +20,7 @@ import Productivity from './pages/Productivity';
 function App() {
     return (
         <Router>
+            <Toaster position="top-center" richColors />
             <AuthProvider>
                 <ThemeProvider>
                     <LanguageProvider>
