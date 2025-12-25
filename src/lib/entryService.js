@@ -53,26 +53,7 @@ export const uploadAvatar = async (file, userId) => {
 
 export const addEntry = async (userId, entry) => {
     try {
-        // entry has: title, content, imageUrl, isSecret, mood
-        const dbEntry = {
-            title: entry.title,
-            content: entry.content,
-            image_url: entry.imageUrl,      // Map camelCase to snake_case
-            is_secret: entry.isSecret,      // Map camelCase to snake_case
-            mood: entry.mood,
-            user_id: userId,
-            created_at: new Date().toISOString() // Standard renaming from 'date' to 'created_at' usually, but code used 'date'. Keeping 'date' or checking error?
-            // Error didn't complain about 'date'. But Supabase defaults usually use created_at. 
-            // Let's stick to what we know failed: imageUrl -> image_url.
-            // Wait, if I change 'date' to 'created_at' I might break it if they actually have a 'date' column.
-            // I will use 'date' if that wasn't the error, but standard is created_at.
-            // Safest bet for 'date' is to leave it if it didn't error, 
-            // OR checks generic error "Error adding document".
-            // I'll stick to 'date' for now but comments suggest snake_case convention.
-        };
-
-        // Actually, let's map 'date' to 'created_at' if possible, but I don't want to guess.
-        // I will map the known failures.
+        // entry has: title, content, imageUrl, isSecret, mood, habits, date, folderId
 
         const { data, error } = await supabase
             .from(TABLE)
@@ -84,6 +65,7 @@ export const addEntry = async (userId, entry) => {
                 mood: entry.mood,
                 habits: entry.habits,
                 user_id: userId,
+                folder_id: entry.folderId || null,
                 date: entry.date ? new Date(entry.date).toISOString() : new Date().toISOString()
             }])
             .select();
@@ -96,13 +78,22 @@ export const addEntry = async (userId, entry) => {
     }
 };
 
-export const getEntries = async (userId, includeSecret = false) => {
+export const getEntries = async (userId, includeSecret = false, folderId = null) => {
     try {
         let query = supabase
             .from(TABLE)
-            .select('*')
-            .eq('user_id', userId)
-            .order('date', { ascending: false });
+            .select('*, folders(name, color)') // inner join-ish fetch for folder details if needed, or just ID
+            .eq('user_id', userId);
+
+        if (folderId) {
+            if (folderId === 'Uncategorized') {
+                query = query.is('folder_id', null);
+            } else {
+                query = query.eq('folder_id', folderId);
+            }
+        }
+
+        query = query.order('date', { ascending: false });
 
         const { data, error } = await query;
         if (error) throw error;
@@ -113,7 +104,9 @@ export const getEntries = async (userId, includeSecret = false) => {
             // Map back to camelCase for app consumption
             imageUrl: d.image_url,
             isSecret: d.is_secret,
-            habits: d.habits || {}, // Default to empty object if null
+            habits: d.habits || {},
+            folderId: d.folder_id,
+            folder: d.folders, // populated if we select folders(...)
             date: d.date ? { toDate: () => new Date(d.date) } : null,
         }));
 
@@ -220,6 +213,43 @@ export const setUserPin = async (userId, pin) => {
     if (error) throw error;
 };
 
+// ... existing exports ...
+
+// Folder Operations
+
+export const createFolder = async (userId, name, color = 'zinc', isSecret = false) => {
+    const { data, error } = await supabase
+        .from('folders')
+        .insert([{ user_id: userId, name, color, is_secret: isSecret }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getFolders = async (userId, isSecret = false) => {
+    const { data, error } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_secret', isSecret)
+        .order('name');
+
+    if (error) throw error;
+    return data;
+};
+
+export const deleteFolder = async (folderId) => {
+    const { error } = await supabase
+        .from('folders')
+        .delete()
+        .eq('id', folderId);
+
+    if (error) throw error;
+};
+
+// Updated exportData to include folders
 export const exportData = async (userId) => {
     try {
         // Fetch Profile
@@ -227,9 +257,16 @@ export const exportData = async (userId) => {
         // Fetch Entries (including secret ones)
         const entries = await getEntries(userId, true);
 
+        // Fetch Folders
+        const { data: folders } = await supabase
+            .from('folders')
+            .select('*')
+            .eq('user_id', userId);
+
         const exportObject = {
             user: profile,
             entries: entries,
+            folders: folders || [],
             exportedAt: new Date().toISOString(),
             app: "Deep Dairy"
         };

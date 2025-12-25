@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getEntries, deleteEntry, getUserPin, setUserPin } from '../lib/entryService'; // We will assume getEntries filters secret ones separately if parameterized
+import { getEntries, deleteEntry, getUserPin, setUserPin, getFolders, createFolder, deleteFolder } from '../lib/entryService'; // We will assume getEntries filters secret ones separately if parameterized
 import { motion } from 'framer-motion';
-import { Lock, Unlock, Trash2, Key } from 'lucide-react';
+import { Lock, Unlock, Trash2, Key, Folder, Plus, X, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const SecretLog = () => {
     const { currentUser, signIn } = useAuth();
@@ -16,7 +17,11 @@ const SecretLog = () => {
     const [isSettingPin, setIsSettingPin] = useState(false);
 
     const [entries, setEntries] = useState([]);
+    const [folders, setFolders] = useState([]);
+    const [selectedFolder, setSelectedFolder] = useState('Uncategorized');
     const [loading, setLoading] = useState(false);
+    const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
 
     useEffect(() => {
         if (currentUser?.id) {
@@ -46,7 +51,7 @@ const SecretLog = () => {
                 setSavedPin(pin);
                 setIsSettingPin(false); // Now we move to unlock state (or just unlock immediately)
                 setIsUnlocked(true);
-                fetchSecretEntries();
+                fetchSecretData();
                 alert("PIN Set Successfully!");
             } catch (err) {
                 console.error(err);
@@ -56,7 +61,7 @@ const SecretLog = () => {
             // Verifying existing PIN
             if (pin === savedPin) {
                 setIsUnlocked(true);
-                fetchSecretEntries();
+                fetchSecretData();
             } else {
                 alert("Incorrect PIN");
                 setPin('');
@@ -71,14 +76,71 @@ const SecretLog = () => {
         }
     };
 
-    const fetchSecretEntries = async () => {
+    // Re-fetch when folder changes AND unlocked
+    useEffect(() => {
+        if (isUnlocked) {
+            fetchSecretData();
+        }
+    }, [selectedFolder]);
+
+    const fetchSecretData = async () => {
         setLoading(true);
-        // In a real app, use specific query or filter
-        const all = await getEntries(currentUser.id, true);
-        const secrets = all.filter(e => e.isSecret);
-        setEntries(secrets);
-        setLoading(false);
+        try {
+            const [entriesData, foldersData] = await Promise.all([
+                getEntries(currentUser.id, true, selectedFolder),
+                getFolders(currentUser.id, true) // Fetch SECRET folders
+            ]);
+
+            // Client-side filter for strict secretness if API doesn't enforce it (it usually does based on separate table or flag)
+            // But here getEntries returns ALL entries if includeSecret is true, so we must filter out non-secret ones manually
+            // UNLESS getEntries is modified to return ONLY secret ones if requested.
+            // Current getEntries logic: if(includeSecret) return entries; -> This returns BOTH secret and non-secret.
+            // We want ONLY secret entries here.
+            const secrets = entriesData.filter(e => e.isSecret);
+
+            setEntries(secrets);
+            setFolders(foldersData || []);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load secret data");
+        } finally {
+            setLoading(false);
+        }
     };
+
+    const handleCreateFolder = async (e) => {
+        e.preventDefault();
+        if (!newFolderName.trim()) return;
+
+        const promise = createFolder(currentUser.id, newFolderName, 'red', true); // isSecret = true
+        toast.promise(promise, {
+            loading: 'Creating secret folder...',
+            success: (data) => {
+                setFolders([...folders, data]);
+                setNewFolderName('');
+                setShowNewFolderInput(false);
+                return 'Secret folder created!';
+            },
+            error: 'Failed to create folder'
+        });
+    };
+
+    const handleDeleteFolder = async (folderId, e) => {
+        e.stopPropagation();
+        if (!window.confirm("Delete this folder? Entries will be unassigned.")) return;
+
+        const promise = deleteFolder(folderId);
+        toast.promise(promise, {
+            loading: 'Deleting folder...',
+            success: () => {
+                setFolders(folders.filter(f => f.id !== folderId));
+                if (selectedFolder === folderId) setSelectedFolder(null);
+                return 'Folder deleted';
+            },
+            error: 'Failed to delete folder'
+        });
+    };
+
 
     if (isLoadingPin) {
         return <div className="p-10 text-center text-neutral-500">Checking Security...</div>;
@@ -162,6 +224,78 @@ const SecretLog = () => {
                 </button>
             </div>
 
+            {/* Secret Folders Section */}
+            <div className="flex items-center space-x-3 overflow-x-auto pb-4 scrollbar-hide">
+                <button
+                    onClick={() => setSelectedFolder('Uncategorized')}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${selectedFolder === 'Uncategorized'
+                            ? 'bg-rose-600 text-white shadow-md'
+                            : 'bg-rose-50 dark:bg-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-slate-700'
+                        }`}
+                >
+                    <Folder size={18} />
+                    <span>General</span>
+                </button>
+
+                {folders.map(folder => (
+                    <div
+                        key={folder.id}
+                        onClick={() => setSelectedFolder(folder.id)}
+                        className={`group relative flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all cursor-pointer ${selectedFolder === folder.id
+                                ? 'bg-rose-600 text-white shadow-md'
+                                : 'bg-rose-50 dark:bg-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-slate-700'
+                            }`}
+                    >
+                        <Folder size={18} />
+                        <span>{folder.name}</span>
+                        <button
+                            onClick={(e) => handleDeleteFolder(folder.id, e)}
+                            className="ml-2 opacity-0 group-hover:opacity-100 hover:text-rose-300 transition-opacity"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ))}
+
+                <button
+                    onClick={() => setSelectedFolder(null)}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${selectedFolder === null
+                            ? 'bg-rose-600 text-white shadow-md'
+                            : 'bg-rose-50 dark:bg-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-slate-700'
+                        }`}
+                >
+                    <Folder size={18} />
+                    <span>All Secrets</span>
+                </button>
+
+                {showNewFolderInput ? (
+                    <form onSubmit={handleCreateFolder} className="flex items-center space-x-2 bg-rose-50 dark:bg-slate-800 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder="Secret Folder"
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            className="bg-transparent border-none focus:ring-0 p-0 text-sm text-rose-800 dark:text-rose-200 w-32 placeholder-rose-400"
+                        />
+                        <button type="submit" className="text-rose-600 dark:text-rose-400">
+                            <Plus size={18} />
+                        </button>
+                        <button type="button" onClick={() => setShowNewFolderInput(false)} className="text-rose-400 hover:text-rose-600">
+                            <X size={18} />
+                        </button>
+                    </form>
+                ) : (
+                    <button
+                        onClick={() => setShowNewFolderInput(true)}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-dashed border-rose-300 dark:border-rose-700 text-rose-500 dark:text-rose-400 hover:border-rose-400 hover:text-rose-600 transition-all whitespace-nowrap"
+                    >
+                        <Plus size={18} />
+                        <span>New Folder</span>
+                    </button>
+                )}
+            </div>
+
             {loading ? <p className="text-neutral-500 dark:text-slate-400">Loading secrets...</p> : (
                 <div className="grid gap-6">
                     {entries.map((entry, index) => (
@@ -180,9 +314,17 @@ const SecretLog = () => {
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <h2 className="text-xl font-bold text-rose-900 dark:text-rose-100">{entry.title}</h2>
-                                    <p className="text-sm text-rose-400 dark:text-rose-300 font-medium">
-                                        {entry.date ? format(entry.date.toDate(), 'PPP p') : 'Just now'}
-                                    </p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <p className="text-sm text-rose-400 dark:text-rose-300 font-medium">
+                                            {entry.date ? format(entry.date.toDate(), 'PPP p') : 'Just now'}
+                                        </p>
+                                        {entry.folder && (
+                                            <span className="text-xs bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                <Folder size={10} />
+                                                {entry.folder.name}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <p className="whitespace-pre-wrap text-rose-900/80 dark:text-slate-300 leading-relaxed font-serif">{entry.content}</p>

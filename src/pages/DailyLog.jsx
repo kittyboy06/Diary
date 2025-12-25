@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getEntries, deleteEntry } from '../lib/entryService';
+import { getEntries, deleteEntry, getFolders, createFolder, deleteFolder } from '../lib/entryService';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Trash2, Lock, Calendar, Search, Filter } from 'lucide-react';
+import { Trash2, Lock, Calendar, Search, Filter, Folder, Plus, X } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
+import { toast } from 'sonner';
 
 const DailyLog = () => {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
     const [entries, setEntries] = useState([]);
+    const [folders, setFolders] = useState([]);
+    const [selectedFolder, setSelectedFolder] = useState('Uncategorized'); // 'Uncategorized' means General (no folder), null means All
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState('All');
+    const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
 
     const MOOD_MAP = {
         'happy': '😃',
@@ -25,21 +30,60 @@ const DailyLog = () => {
         'anxious': '😰'
     };
 
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [entriesData, foldersData] = await Promise.all([
+                getEntries(currentUser.id, false, selectedFolder), // Correctly passes selectedFolder if API supports it
+                getFolders(currentUser.id, false) // Fetch non-secret folders
+            ]);
+            setEntries(entriesData);
+            setFolders(foldersData || []);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load data");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-
+    // Re-fetch when folder changes
     useEffect(() => {
-        const fetchEntries = async () => {
-            try {
-                const data = await getEntries(currentUser.id);
-                setEntries(data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchEntries();
-    }, [currentUser]);
+        fetchData();
+    }, [currentUser, selectedFolder]);
+
+    const handleCreateFolder = async (e) => {
+        e.preventDefault();
+        if (!newFolderName.trim()) return;
+
+        const promise = createFolder(currentUser.id, newFolderName);
+        toast.promise(promise, {
+            loading: 'Creating folder...',
+            success: (data) => {
+                setFolders([...folders, data]);
+                setNewFolderName('');
+                setShowNewFolderInput(false);
+                return 'Folder created!';
+            },
+            error: 'Failed to create folder'
+        });
+    };
+
+    const handleDeleteFolder = async (folderId, e) => {
+        e.stopPropagation();
+        if (!window.confirm("Delete this folder? Entries in it will remain but be unassigned.")) return;
+
+        const promise = deleteFolder(folderId);
+        toast.promise(promise, {
+            loading: 'Deleting folder...',
+            success: () => {
+                setFolders(folders.filter(f => f.id !== folderId));
+                if (selectedFolder === folderId) setSelectedFolder(null);
+                return 'Folder deleted';
+            },
+            error: 'Failed to delete folder'
+        });
+    };
 
     const handleDelete = async (id) => {
         if (window.confirm(t('delete_confirm'))) {
@@ -55,7 +99,7 @@ const DailyLog = () => {
         return matchesSearch && matchesMood;
     });
 
-    if (loading) {
+    if (loading && !entries.length) { // Only show skeleton on initial load or empty
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center mb-8">
@@ -89,7 +133,7 @@ const DailyLog = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-8">
+            <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
                 <h1 className="text-3xl font-bold text-neutral-800 dark:text-white">{t('daily_log')}</h1>
 
                 <div className="flex gap-2 w-full md:w-auto">
@@ -128,13 +172,87 @@ const DailyLog = () => {
                 </div>
             </div>
 
+            {/* Folders Section */}
+            <div className="flex items-center space-x-3 overflow-x-auto pb-4 scrollbar-hide">
+                <button
+                    onClick={() => setSelectedFolder('Uncategorized')}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${selectedFolder === 'Uncategorized'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'bg-white dark:bg-slate-800 text-neutral-600 dark:text-slate-300 hover:bg-neutral-50 dark:hover:bg-slate-700'
+                        }`}
+                >
+                    <Folder size={18} />
+                    <span>General</span>
+                </button>
+
+                {folders.map(folder => (
+                    <div
+                        key={folder.id}
+                        onClick={() => setSelectedFolder(folder.id)}
+                        className={`group relative flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all cursor-pointer ${selectedFolder === folder.id
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white dark:bg-slate-800 text-neutral-600 dark:text-slate-300 hover:bg-neutral-50 dark:hover:bg-slate-700'
+                            }`}
+                    >
+                        <Folder size={18} />
+                        <span>{folder.name}</span>
+                        <button
+                            onClick={(e) => handleDeleteFolder(folder.id, e)}
+                            className="ml-2 opacity-0 group-hover:opacity-100 hover:text-red-300 transition-opacity"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                ))}
+
+                <button
+                    onClick={() => setSelectedFolder(null)}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${selectedFolder === null
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'bg-white dark:bg-slate-800 text-neutral-600 dark:text-slate-300 hover:bg-neutral-50 dark:hover:bg-slate-700'
+                        }`}
+                >
+                    <Folder size={18} />
+                    <span>All Entries</span>
+                </button>
+
+                {showNewFolderInput ? (
+                    <form onSubmit={handleCreateFolder} className="flex items-center space-x-2 bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-900/50">
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder="Folder Name"
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            className="bg-transparent border-none focus:ring-0 p-0 text-sm text-neutral-800 dark:text-white w-32 placeholder-neutral-400"
+                        />
+                        <button type="submit" className="text-indigo-600 dark:text-indigo-400">
+                            <Plus size={18} />
+                        </button>
+                        <button type="button" onClick={() => setShowNewFolderInput(false)} className="text-neutral-400 hover:text-neutral-600">
+                            <X size={18} />
+                        </button>
+                    </form>
+                ) : (
+                    <button
+                        onClick={() => setShowNewFolderInput(true)}
+                        className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-dashed border-neutral-300 dark:border-slate-600 text-neutral-500 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all whitespace-nowrap"
+                    >
+                        <Plus size={18} />
+                        <span>New Folder</span>
+                    </button>
+                )}
+            </div>
+
             {filteredEntries.length === 0 ? (
                 <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-neutral-100 dark:border-slate-700">
                     <div className="bg-indigo-50 dark:bg-indigo-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400">
-                        <Calendar size={32} />
+                        <Folder size={32} />
                     </div>
                     <h2 className="text-xl font-semibold text-neutral-800 dark:text-white">{t('no_entries')}</h2>
-                    <p className="text-neutral-500 dark:text-slate-400 mt-2">Try adjusting your filters or search terms.</p>
+                    <p className="text-neutral-500 dark:text-slate-400 mt-2">
+                        {searchQuery ? 'Try adjusting your filters.' : 'This folder is empty.'}
+                    </p>
                 </div>
             ) : (
                 <div className="grid gap-6">
@@ -156,10 +274,18 @@ const DailyLog = () => {
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-sm text-neutral-400 dark:text-slate-500 font-medium flex items-center gap-2 mt-1">
-                                        <Calendar size={14} />
-                                        {entry.date ? format(entry.date.toDate(), 'PPP p') : 'Just now'}
-                                    </p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <p className="text-sm text-neutral-400 dark:text-slate-500 font-medium flex items-center gap-2">
+                                            <Calendar size={14} />
+                                            {entry.date ? format(entry.date.toDate(), 'PPP p') : 'Just now'}
+                                        </p>
+                                        {entry.folder && (
+                                            <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                <Folder size={10} />
+                                                {entry.folder.name}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 {entry.isSecret && <Lock className="text-rose-400" size={18} />}
                             </div>
@@ -167,8 +293,6 @@ const DailyLog = () => {
                             <div className="prose prose-neutral dark:prose-invert max-w-none text-neutral-600 dark:text-slate-300">
                                 <p className="whitespace-pre-wrap line-clamp-3">{entry.content}</p>
                             </div>
-
-
 
                             {entry.imageUrl && (
                                 <div className="mt-4 rounded-xl overflow-hidden h-48 w-full bg-neutral-100 dark:bg-slate-900">
