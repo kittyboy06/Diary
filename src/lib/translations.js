@@ -38,6 +38,8 @@ export const translations = {
         set_pin_title: "Set Your Secret PIN",
         locked_msg: "Enter your PIN to access your private entries.",
         set_pin_msg: "Create a PIN to protect your secret entries.",
+        enter_pin: "Enter PIN",
+        locked_msg_short: "Enter PIN to access Secret Folders",
         language: "Language",
         edit_profile: "Edit Profile",
         saving: "Saving...",

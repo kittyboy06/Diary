@@ -17,8 +17,8 @@ export const LanguageProvider = ({ children }) => {
 
     // Helper to get translation
     const t = (key) => {
-        const langData = translations[language] || translations['en'];
-        return langData?.[key] || key;
+        const langData = translations[language];
+        return langData?.[key] || translations['en']?.[key] || key;
     };
 
     return (
