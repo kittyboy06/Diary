@@ -131,8 +131,14 @@ const CreateEntry = () => {
         toast.promise(savePromise(), {
             loading: 'Saving entry...',
             success: () => {
-                navigate('/');
-                return 'Entry saved successfully!';
+                // Stay on page: clear form
+                setTitle('');
+                setContent('');
+                setImage(null);
+                setPreview(null);
+                // Keep date, mood, folder, secret settings as they are for quick consecutive entry
+
+                return 'Entry saved! Ready for next one.';
             },
             error: 'Failed to save entry'
         });
@@ -279,9 +285,9 @@ const CreateEntry = () => {
                                         onChange={(e) => setSelectedFolderId(e.target.value)}
                                         className="appearance-none pl-8 pr-8 py-1 rounded-full border border-neutral-200 dark:border-slate-700 bg-transparent text-sm text-neutral-600 dark:text-slate-300 focus:ring-0 outline-none cursor-pointer hover:border-indigo-400 transition-all max-w-[150px] truncate"
                                     >
-                                        <option value="">{isSecret ? 'General Secret' : 'General'}</option>
+                                        <option value="" className="bg-white dark:bg-slate-800 text-neutral-900 dark:text-white">{isSecret ? 'General Secret' : 'General'}</option>
                                         {folders.map(f => (
-                                            <option key={f.id} value={f.id}>{f.name}</option>
+                                            <option key={f.id} value={f.id} className="bg-white dark:bg-slate-800 text-neutral-900 dark:text-white">{f.name}</option>
                                         ))}
                                     </select>
                                     <Folder size={16} className="absolute left-2.5 top-1.5 text-neutral-400 pointer-events-none" />

@@ -53,7 +53,7 @@ const Layout = () => {
                 w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-neutral-200/50 dark:border-slate-700/50 
                 fixed h-full z-40 transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
-                md:translate-x-0 md:static md:flex flex-col p-6
+                md:translate-x-0 md:sticky md:top-0 md:h-screen md:flex flex-col p-6
             `}>
                 <div className="mb-10 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -71,7 +71,7 @@ const Layout = () => {
                     <NavItem to="/create-entry" icon={PenTool} label={t('new_entry')} onClick={closeMobileMenu} />
                     <NavItem to="/daily-log" icon={Book} label={t('daily_log')} onClick={closeMobileMenu} />
                     <NavItem to="/productivity" icon={Target} label="Productivity" onClick={closeMobileMenu} />
-                    <NavItem to="/secret-log" icon={Lock} label={t('secret_log')} onClick={closeMobileMenu} />
+                    <NavItem to="/secret" icon={Lock} label={t('secret_log')} onClick={closeMobileMenu} />
                     <NavItem to="/profile" icon={User} label={t('profile')} onClick={closeMobileMenu} />
                 </nav>
 

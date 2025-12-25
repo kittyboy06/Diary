@@ -78,7 +78,7 @@ export const addEntry = async (userId, entry) => {
     }
 };
 
-export const getEntries = async (userId, includeSecret = false, folderId = null) => {
+export const getEntries = async (userId, includeSecret = false, folderId = null, page = 0, pageSize = 20, onlySecret = false) => {
     try {
         let query = supabase
             .from(TABLE)
@@ -93,7 +93,19 @@ export const getEntries = async (userId, includeSecret = false, folderId = null)
             }
         }
 
-        query = query.order('date', { ascending: false });
+        // Secret Filtering Logic
+        if (onlySecret) {
+            query = query.eq('is_secret', true);
+        } else if (!includeSecret) {
+            query = query.eq('is_secret', false);
+        }
+        // If includeSecret is true and onlySecret is false, we fetch both (no filter on is_secret), which matches previous 'includeSecret' behavior.
+
+        // Sort by favorite first (descending), then date (descending)
+        query = query
+            .order('is_favorite', { ascending: false })
+            .order('date', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
 
         const { data, error } = await query;
         if (error) throw error;
@@ -107,11 +119,16 @@ export const getEntries = async (userId, includeSecret = false, folderId = null)
             habits: d.habits || {},
             folderId: d.folder_id,
             folder: d.folders, // populated if we select folders(...)
+            isFavorite: d.is_favorite, // [NEW] Map from DB
             date: d.date ? { toDate: () => new Date(d.date) } : null,
         }));
 
-        if (includeSecret) return entries;
-        return entries.filter(e => !e.isSecret);
+        // No need to filter client-side anymore if we trust the query, but old code might rely on it.
+        // If onlySecret is true, we already filtered in SQL.
+        // If includeSecret is true, we return all.
+        // If includeSecret is false, we already filtered is_secret=false in SQL.
+
+        return entries;
     } catch (e) {
         console.error("Error getting documents: ", e);
         throw e;
@@ -141,6 +158,33 @@ export const uploadImage = async (file, userId) => {
         .getPublicUrl(fileName);
 
     return data.publicUrl;
+};
+
+export const toggleFavorite = async (entryId, isFavorite) => {
+    const { error } = await supabase
+        .from(TABLE)
+        .update({ is_favorite: isFavorite })
+        .eq('id', entryId);
+
+    if (error) throw error;
+};
+
+export const updateEntry = async (entryId, updates) => {
+    // updates can contain: title, content, mood, folderId (map to folder_id)
+    const dbUpdates = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.content !== undefined) dbUpdates.content = updates.content;
+    if (updates.mood !== undefined) dbUpdates.mood = updates.mood;
+    if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId || null; // Handle null explicitly
+
+    const { data, error } = await supabase
+        .from(TABLE)
+        .update(dbUpdates)
+        .eq('id', entryId)
+        .select();
+
+    if (error) throw error;
+    return data[0];
 };
 
 export const getEntryStats = async (userId) => {

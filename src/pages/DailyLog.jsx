@@ -1,24 +1,35 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getEntries, deleteEntry, getFolders, createFolder, deleteFolder } from '../lib/entryService';
+import { getEntries, deleteEntry, getFolders, createFolder, deleteFolder, toggleFavorite, updateEntry } from '../lib/entryService';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Trash2, Lock, Calendar, Search, Filter, Folder, Plus, X } from 'lucide-react';
+import { Trash2, Lock, Calendar, Search, Filter, Folder, Plus, X, Star, Edit2 } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
+import EditEntryModal from '../components/EditEntryModal';
 import { toast } from 'sonner';
 
 const DailyLog = () => {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
+    const location = useLocation();
     const [entries, setEntries] = useState([]);
     const [folders, setFolders] = useState([]);
-    const [selectedFolder, setSelectedFolder] = useState('Uncategorized'); // 'Uncategorized' means General (no folder), null means All
+    const [selectedFolder, setSelectedFolder] = useState(location.state?.folderId || 'Uncategorized'); // 'Uncategorized' means General (no folder), null means All
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMood, setSelectedMood] = useState('All');
     const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+
+    // Editing State
+    const [editingEntry, setEditingEntry] = useState(null);
+
     const [newFolderName, setNewFolderName] = useState('');
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [expandedEntries, setExpandedEntries] = useState(new Set());
+    const PAGE_SIZE = 10;
 
     const MOOD_MAP = {
         'happy': '😃',
@@ -30,15 +41,30 @@ const DailyLog = () => {
         'anxious': '😰'
     };
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (reset = false) => {
+        if (reset) {
+            setLoading(true);
+            setEntries([]);
+            setPage(0);
+            setHasMore(true);
+        }
+
         try {
+            const currentPage = reset ? 0 : page;
             const [entriesData, foldersData] = await Promise.all([
-                getEntries(currentUser.id, false, selectedFolder), // Correctly passes selectedFolder if API supports it
-                getFolders(currentUser.id, false) // Fetch non-secret folders
+                getEntries(currentUser.id, false, selectedFolder, currentPage, PAGE_SIZE),
+                reset ? getFolders(currentUser.id, false) : Promise.resolve(null) // Only fetch folders on reset/init
             ]);
-            setEntries(entriesData);
-            setFolders(foldersData || []);
+
+            if (entriesData.length < PAGE_SIZE) {
+                setHasMore(false);
+            }
+
+            setEntries(prev => reset ? entriesData : [...prev, ...entriesData]);
+
+            if (reset && foldersData) {
+                setFolders(foldersData);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to load data");
@@ -47,9 +73,20 @@ const DailyLog = () => {
         }
     };
 
+    const handleLoadMore = () => {
+        setPage(prev => prev + 1);
+    };
+
+    // Fetch on page change (if not reset)
+    useEffect(() => {
+        if (page > 0) {
+            fetchData(false);
+        }
+    }, [page]);
+
     // Re-fetch when folder changes
     useEffect(() => {
-        fetchData();
+        fetchData(true);
     }, [currentUser, selectedFolder]);
 
     const handleCreateFolder = async (e) => {
@@ -92,6 +129,74 @@ const DailyLog = () => {
         }
     }
 
+    const handleUpdateEntry = async (id, updates) => {
+        const promise = updateEntry(id, updates);
+        toast.promise(promise, {
+            loading: 'Updating entry...',
+            success: (updatedData) => {
+                // Update local state
+                setEntries(entries.map(e => {
+                    if (e.id === id) {
+                        return {
+                            ...e,
+                            ...updates,
+                            folder: updates.folderId ? folders.find(f => f.id === updates.folderId) : null,
+                            folderId: updates.folderId
+                        };
+                    }
+                    return e;
+                }));
+                // If we moved it out of the current folder filter, we might want to remove it from view?
+                // For now user just wants to edit.
+                if (selectedFolder && selectedFolder !== 'Uncategorized' && updates.folderId && updates.folderId !== selectedFolder) {
+                    // It was moved OUT of this folder
+                    setEntries(prev => prev.filter(e => e.id !== id));
+                }
+
+                return 'Entry updated!';
+            },
+            error: 'Failed to update entry'
+        });
+    };
+
+    const handleToggleFavorite = async (e, entry) => {
+        e.stopPropagation();
+        const newStatus = !entry.isFavorite;
+
+        // Optimistic UI update
+        const updatedEntries = entries.map(ent =>
+            ent.id === entry.id ? { ...ent, isFavorite: newStatus } : ent
+        ).sort((a, b) => { // Re-sort locally to reflect change immediately
+            // Sort by favorite (true first) -> date (desc)
+            if (a.isFavorite === b.isFavorite) {
+                return b.date.toDate() - a.date.toDate();
+            }
+            return b.isFavorite ? 1 : -1;
+        });
+
+        setEntries(updatedEntries);
+
+        try {
+            await toggleFavorite(entry.id, newStatus);
+        } catch (error) {
+            console.error("Failed to toggle favorite:", error);
+            toast.error("Failed to update favorite");
+            fetchData(true); // Revert on error
+        }
+    };
+
+    const toggleExpand = (id) => {
+        setExpandedEntries(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
+
     const filteredEntries = entries.filter(entry => {
         const matchesSearch = (entry.title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
             (entry.content?.toLowerCase() || '').includes(searchQuery.toLowerCase());
@@ -99,7 +204,7 @@ const DailyLog = () => {
         return matchesSearch && matchesMood;
     });
 
-    if (loading && !entries.length) { // Only show skeleton on initial load or empty
+    if (loading && !entries.length && page === 0) { // Only show skeleton on initial load
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center mb-8">
@@ -244,6 +349,15 @@ const DailyLog = () => {
                 )}
             </div>
 
+            {/* Edit Modal */}
+            <EditEntryModal
+                isOpen={!!editingEntry}
+                onClose={() => setEditingEntry(null)}
+                entry={editingEntry}
+                folders={folders}
+                onSave={handleUpdateEntry}
+            />
+
             {filteredEntries.length === 0 ? (
                 <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-neutral-100 dark:border-slate-700">
                     <div className="bg-indigo-50 dark:bg-indigo-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400">
@@ -255,58 +369,110 @@ const DailyLog = () => {
                     </p>
                 </div>
             ) : (
-                <div className="grid gap-6">
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                     {filteredEntries.map((entry, index) => (
                         <motion.div
                             key={entry.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.1 }}
-                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700 hover:shadow-md transition-shadow relative group"
+                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700 hover:shadow-md transition-shadow relative group flex flex-col h-full min-h-[250px]"
                         >
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <h2 className="text-xl font-bold text-neutral-800 dark:text-white">{entry.title || "Untitled"}</h2>
+                                        <h2 className="text-xl font-bold text-neutral-800 dark:text-white line-clamp-1" title={entry.title}>{entry.title || "Untitled"}</h2>
                                         {entry.mood && MOOD_MAP[entry.mood.toLowerCase()] && (
                                             <span className="text-xl" title={entry.mood}>
                                                 {MOOD_MAP[entry.mood.toLowerCase()]}
                                             </span>
                                         )}
                                     </div>
+
                                     <div className="flex items-center gap-3 mt-1">
                                         <p className="text-sm text-neutral-400 dark:text-slate-500 font-medium flex items-center gap-2">
                                             <Calendar size={14} />
-                                            {entry.date ? format(entry.date.toDate(), 'PPP p') : 'Just now'}
+                                            {entry.date ? format(entry.date.toDate(), 'PPP') : 'Just now'}
                                         </p>
                                         {entry.folder && (
-                                            <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                            <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1 line-clamp-1 max-w-[100px]">
                                                 <Folder size={10} />
                                                 {entry.folder.name}
                                             </span>
                                         )}
                                     </div>
                                 </div>
-                                {entry.isSecret && <Lock className="text-rose-400" size={18} />}
-                            </div>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => handleToggleFavorite(e, entry)}
+                                        className={`p-1.5 rounded-full transition-colors ${entry.isFavorite ? 'text-amber-400 hover:text-amber-500 bg-amber-50 dark:bg-amber-900/20' : 'text-neutral-300 dark:text-slate-600 hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700'}`}
+                                        title={entry.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                                    >
+                                        <Star size={16} fill={entry.isFavorite ? "currentColor" : "none"} />
+                                    </button>
 
-                            <div className="prose prose-neutral dark:prose-invert max-w-none text-neutral-600 dark:text-slate-300">
-                                <p className="whitespace-pre-wrap line-clamp-3">{entry.content}</p>
-                            </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingEntry(entry);
+                                        }}
+                                        className="text-neutral-300 hover:text-indigo-500 p-1.5 transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Edit Entry"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
 
-                            {entry.imageUrl && (
-                                <div className="mt-4 rounded-xl overflow-hidden h-48 w-full bg-neutral-100 dark:bg-slate-900">
-                                    <img src={entry.imageUrl} alt="Entry attachment" className="w-full h-full object-cover" />
+                                    {entry.isSecret && <Lock className="text-rose-400" size={16} />}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // prevent card click
+                                            handleDelete(entry.id);
+                                        }}
+                                        className="text-neutral-300 hover:text-red-500 p-1.5 transition-colors opacity-0 group-hover:opacity-100"
+                                        title={t('delete_confirm')}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
-                            )}
-
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleDelete(entry.id)} className="text-red-400 hover:text-red-600 p-2">
-                                    <Trash2 size={18} />
-                                </button>
                             </div>
+
+                            <div
+                                onClick={() => toggleExpand(entry.id)}
+                                className="prose prose-neutral dark:prose-invert max-w-none text-neutral-600 dark:text-slate-300 cursor-pointer flex-1"
+                            >
+                                <p className={`whitespace-pre-wrap ${expandedEntries.has(entry.id) ? '' : 'line-clamp-6'}`}>
+                                    {entry.content}
+                                </p>
+                                {!expandedEntries.has(entry.id) && entry.content.length > 150 && (
+                                    <span className="text-indigo-500 text-sm font-medium hover:underline mt-1 block">Read more</span>
+                                )}
+                            </div>
+
+                            {
+                                entry.imageUrl && (
+                                    <div className="mt-4 rounded-xl overflow-hidden h-40 w-full bg-neutral-100 dark:bg-slate-900 shrink-0">
+                                        <img src={entry.imageUrl} alt="Entry attachment" className="w-full h-full object-cover" />
+                                    </div>
+                                )
+                            }
                         </motion.div>
                     ))}
+                </div>
+            )}
+
+            {hasMore && !loading && entries.length > 0 && (
+                <div className="flex justify-center pt-6">
+                    <button
+                        onClick={handleLoadMore}
+                        className="bg-white dark:bg-slate-800 text-neutral-600 dark:text-slate-300 px-6 py-2 rounded-full border border-neutral-200 dark:border-slate-700 hover:bg-neutral-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                    >
+                        Load More Entries
+                    </button>
+                </div>
+            )}
+            {loading && page > 0 && (
+                <div className="flex justify-center pt-6">
+                    <Skeleton className="h-10 w-32 rounded-full" />
                 </div>
             )}
         </div>

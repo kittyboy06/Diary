@@ -36,7 +36,7 @@ function App() {
                                 <Route index element={<Home />} />
                                 <Route path="create-entry" element={<CreateEntry />} />
                                 <Route path="daily-log" element={<DailyLog />} />
-                                <Route path="secret-log" element={<SecretLog />} />
+                                <Route path="secret" element={<SecretLog />} />
                                 <Route path="productivity" element={<Productivity />} />
                                 <Route path="profile" element={<Profile />} />
                             </Route>
