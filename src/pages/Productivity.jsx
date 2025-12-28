@@ -1,247 +1,531 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getHabitLogs, logHabit, getTodayHabits } from '../lib/habitService';
-import { Target, Activity, CheckCircle, Flame } from 'lucide-react';
-import { ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis } from 'recharts';
-import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
+import {
+    createHabit,
+    updateHabit,
+    getHabits,
+    toggleHabitCompletion,
+    getHabitCompletions,
+    deleteHabit,
+    getCollections,
+    createCollection,
+    deleteCollection
+} from '../lib/habitService';
+import { Plus, Trash2, ChevronLeft, ChevronRight, Check, FolderPlus, Folder, MoreVertical, X, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday, startOfWeek, endOfWeek, isSameMonth, getDaysInMonth } from 'date-fns';
+import { toast } from 'sonner';
 import Skeleton from '../components/Skeleton';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function Productivity() {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
+
+    // Data State
+    const [habits, setHabits] = useState([]);
+    const [collections, setCollections] = useState([]);
+    const [completions, setCompletions] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Default Habits
-    const [habits, setHabits] = useState({
-        exercise: false,
-        water: false,
-        learning: false
-    });
+    // UI State
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
 
-    const [stats, setStats] = useState([]);
-    const [streak, setStreak] = useState(0);
-    const [totalDays, setTotalDays] = useState(0);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showCollectionModal, setShowCollectionModal] = useState(false);
+    const [expandedCollections, setExpandedCollections] = useState(new Set());
+    const [editingHabit, setEditingHabit] = useState(null);
 
-    const HABIT_CONFIG = [
-        { id: 'exercise', label: 'Exercise', emoji: '🏃‍♂️', color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' },
-        { id: 'water', label: 'Drink Water', emoji: '💧', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
-        { id: 'learning', label: 'Learning', emoji: '📚', color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' },
-    ];
+    // Forms
+    const [newHabitName, setNewHabitName] = useState('');
+    const [newHabitGoal, setNewHabitGoal] = useState(30);
+    const [newHabitColor, setNewHabitColor] = useState('indigo');
+    const [selectedCollection, setSelectedCollection] = useState('');
+    const [newCollectionName, setNewCollectionName] = useState('');
 
     useEffect(() => {
         if (currentUser) {
             loadData();
         }
-    }, [currentUser]);
+    }, [currentUser, calendarMonth]); // Reload completions when month changes
 
     const loadData = async () => {
         try {
             setLoading(true);
-            // Load Today's status
-            const todayHabits = await getTodayHabits(currentUser.id);
-            if (todayHabits) setHabits(todayHabits);
+            const [habitsData, collectionsData] = await Promise.all([
+                getHabits(currentUser.id),
+                getCollections(currentUser.id)
+            ]);
 
-            // Load History for charts (last 30 days)
-            const endDate = new Date();
-            const startDate = subDays(endDate, 30);
-            const logs = await getHabitLogs(currentUser.id, format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'));
+            setHabits(habitsData || []);
+            setCollections(collectionsData || []);
 
-            processStats(logs);
+            // Auto-expand all collections
+            const allCollectionIds = new Set(collectionsData?.map(c => c.id));
+            setExpandedCollections(allCollectionIds);
+
+            // Load completions for current calendar view (+/- buffer)
+            const start = format(startOfWeek(startOfMonth(calendarMonth)), 'yyyy-MM-dd');
+            const end = format(endOfWeek(endOfMonth(calendarMonth)), 'yyyy-MM-dd');
+            const completionsData = await getHabitCompletions(currentUser.id, start, end);
+            setCompletions(completionsData || []);
         } catch (error) {
             console.error(error);
+            toast.error('Failed to load data');
         } finally {
             setLoading(false);
         }
     };
 
-    const processStats = (logs) => {
-        // Calculate Streak
-        let currentStreak = 0;
-        const sortedLogs = [...logs].reverse(); // Newest first
-
-        // Simple streak logic: check if any habit was done per day backwards
-        // (This is a simplified streak, usually requires checking yesterday, day before, etc.)
-        // For visual demo, we'll count total distinct active days in fetched range
-        const activeDays = logs.filter(l => Object.values(l.habits).some(v => v)).length;
-        setTotalDays(activeDays);
-        setStreak(activeDays); // Placeholder logic for streak
-
-        // Prepare Chart Data
-        // Map last 10 days
-        const last14Days = Array.from({ length: 14 }).map((_, i) => {
-            const date = subDays(new Date(), 13 - i);
-            const dateStr = format(date, 'yyyy-MM-dd');
-            const log = logs.find(l => l.date === dateStr);
-
-            let score = 0;
-            if (log && log.habits) {
-                if (log.habits.exercise) score += 33;
-                if (log.habits.water) score += 33;
-                if (log.habits.learning) score += 34;
-            }
-
-            return {
-                date: format(date, 'dd MMM'),
-                score
-            };
-        });
-        setStats(last14Days);
-    };
-
-    const toggleHabit = async (id) => {
-        const newHabits = { ...habits, [id]: !habits[id] };
-        setHabits(newHabits);
-
-        // Optimistic UI, then save
+    const handleSaveHabit = async (e) => {
+        e.preventDefault();
         try {
-            await logHabit(currentUser.id, format(new Date(), 'yyyy-MM-dd'), newHabits);
-            // Reload stats to update charts immediately (optional, or local update)
+            if (editingHabit) {
+                // Update
+                await updateHabit(editingHabit.id, {
+                    name: newHabitName,
+                    target_days: newHabitGoal,
+                    color: newHabitColor,
+                    collection_id: selectedCollection || null
+                });
+                toast.success('Habit updated');
+            } else {
+                // Create
+                await createHabit(currentUser.id, newHabitName, newHabitGoal, newHabitColor, selectedCollection || null);
+                toast.success('Habit created');
+            }
+            closeModal();
             loadData();
         } catch (error) {
-            console.error("Failed to save habit", error);
+            toast.error(editingHabit ? 'Failed to update habit' : 'Failed to create habit');
         }
     };
 
-    if (loading) {
-        return (
-            <div className="space-y-8 max-w-4xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                    <div className="space-y-2">
-                        <Skeleton className="h-10 w-64 rounded-xl" />
-                        <Skeleton className="h-4 w-48 rounded-md" />
-                    </div>
-                    <Skeleton className="h-14 w-40 rounded-2xl" />
-                </div>
+    const openEditModal = (habit) => {
+        setEditingHabit(habit);
+        setNewHabitName(habit.name);
+        setNewHabitGoal(habit.target_days);
+        setNewHabitColor(habit.color);
+        setSelectedCollection(habit.collection_id || '');
+        setShowAddModal(true);
+    };
 
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700">
-                    <Skeleton className="h-6 w-32 mb-6 rounded-md" />
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <Skeleton className="h-32 rounded-2xl" />
-                        <Skeleton className="h-32 rounded-2xl" />
-                        <Skeleton className="h-32 rounded-2xl" />
-                    </div>
-                </div>
+    const closeModal = () => {
+        setShowAddModal(false);
+        setEditingHabit(null);
+        setNewHabitName('');
+        setNewHabitGoal(getDaysInMonth(calendarMonth)); // Reset to max days of current view
+        setNewHabitColor('indigo');
+        setSelectedCollection('');
+    };
 
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-neutral-100 dark:border-slate-700">
-                    <div className="flex justify-between mb-8">
-                        <div className="space-y-2">
-                            <Skeleton className="h-6 w-40 rounded-md" />
-                            <Skeleton className="h-4 w-56 rounded-md" />
-                        </div>
-                    </div>
-                    <Skeleton className="h-64 w-full rounded-xl" />
-                </div>
-            </div>
-        );
-    }
+    const handleOpenAdd = () => {
+        setNewHabitGoal(getDaysInMonth(calendarMonth));
+        setShowAddModal(true);
+    };
+
+    const handleAddCollection = async (e) => {
+        e.preventDefault();
+        try {
+            await createCollection(currentUser.id, newCollectionName);
+            toast.success('Collection created');
+            setShowCollectionModal(false);
+            setNewCollectionName('');
+            loadData();
+        } catch (error) {
+            toast.error('Failed to create collection');
+        }
+    };
+
+    const handleDeleteHabit = async (id) => {
+        if (!confirm('Delete this habit?')) return;
+        try {
+            await deleteHabit(id);
+            toast.success('Deleted');
+            loadData();
+        } catch (error) {
+            toast.error('Failed to delete');
+        }
+    };
+
+    const handleDeleteCollection = async (id) => {
+        if (!confirm('Delete collection? Habits will be unassigned.')) return;
+        try {
+            await deleteCollection(id);
+            toast.success('Collection deleted');
+            loadData();
+        } catch (error) {
+            toast.error('Failed to delete collection');
+        }
+    };
+
+    const toggleCollection = (id) => {
+        const newSet = new Set(expandedCollections);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setExpandedCollections(newSet);
+    };
+
+    const handleToggle = async (habitId) => {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        // Optimistic Update
+        const isCompleted = completions.some(c => c.habit_id === habitId && c.date === dateStr);
+        let newCompletions;
+        if (isCompleted) {
+            newCompletions = completions.filter(c => !(c.habit_id === habitId && c.date === dateStr));
+        } else {
+            newCompletions = [...completions, { habit_id: habitId, date: dateStr }];
+        }
+        setCompletions(newCompletions);
+
+        try {
+            await toggleHabitCompletion(currentUser.id, habitId, dateStr);
+        } catch (error) {
+            toast.error('Failed to update');
+            loadData();
+        }
+    };
+
+    const getCompletionCount = (habitId) => {
+        return completions.filter(c => c.habit_id === habitId).length;
+    };
+
+    const isHabitCompletedToday = (habitId) => {
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        return completions.some(c => c.habit_id === habitId && c.date === dateStr);
+    };
+
+    // --- Grouping Logic ---
+    const unassignedHabits = habits.filter(h => !h.collection_id);
+    const groupedHabits = collections.map(col => ({
+        ...col,
+        habits: habits.filter(h => h.collection_id === col.id)
+    }));
+
+    // --- Calendar helpers ---
+    const calendarDays = eachDayOfInterval({
+        start: startOfWeek(startOfMonth(calendarMonth)),
+        end: endOfWeek(endOfMonth(calendarMonth))
+    });
+
+    const COLORS = [
+        { id: 'indigo', class: 'bg-indigo-500' },
+        { id: 'rose', class: 'bg-rose-500' },
+        { id: 'emerald', class: 'bg-emerald-500' },
+        { id: 'amber', class: 'bg-amber-500' },
+        { id: 'sky', class: 'bg-sky-500' },
+        { id: 'violet', class: 'bg-violet-500' },
+    ];
+
+    if (loading && habits.length === 0) return <Skeleton className="h-96 w-full rounded-3xl" />;
 
     return (
-        <div className="space-y-8 max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-neutral-800 dark:text-white flex items-center gap-3">
-                        <Target className="text-indigo-600 dark:text-indigo-400" />
-                        Productivity Hub
-                    </h1>
-                    <p className="text-neutral-500 dark:text-slate-400 mt-2">Track your daily wins and build consistency.</p>
-                </div>
+        <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto pb-20">
 
-                <div className="flex gap-4">
-                    <div className="bg-orange-50 dark:bg-orange-900/20 px-4 py-3 rounded-2xl flex items-center gap-3 border border-orange-100 dark:border-orange-800/50">
-                        <Flame className="text-orange-500" size={24} />
-                        <div>
-                            <p className="text-xs text-orange-600/80 dark:text-orange-400 uppercase font-bold tracking-wider">Active Days</p>
-                            <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{streak}</p>
+            {/* LEFT: Calendar Panel used for selection */}
+            <div className="lg:w-96 shrink-0 space-y-4 md:space-y-6">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 md:p-6 shadow-sm border border-neutral-100 dark:border-slate-700">
+                    <div className="flex justify-between items-center mb-4 md:mb-6">
+                        <h2 className="text-lg md:text-xl font-bold text-neutral-800 dark:text-white capitalize w-32">
+                            {format(calendarMonth, 'MMMM yyyy')}
+                        </h2>
+                        <div className="flex gap-2">
+                            <button onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))} className="p-2 hover:bg-neutral-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                <ChevronLeft size={18} />
+                            </button>
+                            <button onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="p-2 hover:bg-neutral-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                <ChevronRight size={18} />
+                            </button>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Today's Logger */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-neutral-100 dark:border-slate-700">
-                <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-6 flex items-center gap-2">
-                    <CheckCircle size={20} className="text-neutral-400" />
-                    Today's Goals
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {HABIT_CONFIG.map((h) => (
-                        <button
-                            key={h.id}
-                            onClick={() => toggleHabit(h.id)}
-                            className={`
-                                relative overflow-hidden p-4 rounded-2xl border-2 transition-all duration-300
-                                flex flex-col items-center justify-center gap-2 h-32
-                                ${habits[h.id]
-                                    ? `border-transparent ${h.color} shadow-lg scale-[1.02]`
-                                    : 'border-neutral-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-slate-600 bg-neutral-50 dark:bg-slate-900 text-neutral-400 grayscale'
-                                }
-                            `}
-                        >
-                            <span className="text-4xl filter drop-shadow-sm">{h.emoji}</span>
-                            <span className="font-bold text-sm tracking-wide">{h.label}</span>
+                    <div className="grid grid-cols-7 mb-2">
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+                            <div key={d} className="text-center text-xs font-semibold text-neutral-400 dark:text-slate-500 py-2">{d}</div>
+                        ))}
+                    </div>
 
-                            {habits[h.id] && (
-                                <div className="absolute top-2 right-2">
-                                    <CheckCircle size={16} fill="currentColor" className="text-current opacity-50" />
-                                </div>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            </div>
+                    <div className="grid grid-cols-7 gap-1">
+                        {calendarDays.map(day => {
+                            const isSelected = isSameDay(day, selectedDate);
+                            const isCurrentMonth = isSameMonth(day, calendarMonth);
+                            const isTodayDate = isToday(day);
 
-            {/* Analytics - Trend Chart */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-sm border border-neutral-100 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h2 className="text-lg font-semibold text-neutral-800 dark:text-white flex items-center gap-2">
-                            <Activity size={20} className="text-neutral-400" />
-                            Consistency Trend
-                        </h2>
-                        <p className="text-sm text-neutral-400 mt-1">Completion rate over last 14 days</p>
+                            // Calculate completion rate for this day
+                            const dayStr = format(day, 'yyyy-MM-dd');
+                            const dayCompletions = completions.filter(c => c.date === dayStr).length;
+                            const totalActiveHabits = habits.length; // Simplified
+                            const intensity = totalActiveHabits > 0 ? dayCompletions / totalActiveHabits : 0;
+
+                            return (
+                                <button
+                                    key={day.toString()}
+                                    onClick={() => { setSelectedDate(day); }}
+                                    className={`
+                                        relative h-9 w-9 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm font-medium transition-all mx-auto
+                                        ${!isCurrentMonth ? 'text-neutral-300 dark:text-slate-700' : 'text-neutral-700 dark:text-slate-300'}
+                                        ${isSelected ? 'bg-indigo-600 text-white shadow-md scale-110 z-10' : 'hover:bg-neutral-100 dark:hover:bg-slate-700'}
+                                        ${isTodayDate && !isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-800' : ''}
+                                    `}
+                                >
+                                    {format(day, 'd')}
+                                    {/* Dot indicator for completions */}
+                                    {!isSelected && dayCompletions > 0 && (
+                                        <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${intensity === 1 ? 'bg-emerald-500' : 'bg-indigo-400'}`} />
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
-                <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={stats}>
-                            <defs>
-                                <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis
-                                dataKey="date"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                                dy={10}
-                            />
-                            <YAxis hide domain={[0, 100]} />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: '#1e293b',
-                                    border: 'none',
-                                    borderRadius: '12px',
-                                    color: '#fff',
-                                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                                }}
-                                formatter={(value) => [`${Math.round(value)}%`, 'Completion']}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="score"
-                                stroke="#6366f1"
-                                strokeWidth={3}
-                                fillOpacity={1}
-                                fill="url(#colorScore)"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                {/* Quick Stats Panel */}
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-xl">
+                    <h3 className="text-lg font-semibold opacity-90 mb-1">{format(selectedDate, 'EEEE, MMMM do')}</h3>
+                    <p className="opacity-75 text-sm mb-6">Daily Summary</p>
+
+                    <div className="flex items-end gap-2 mb-2">
+                        <span className="text-4xl font-bold">
+                            {completions.filter(c => c.date === format(selectedDate, 'yyyy-MM-dd')).length}
+                        </span>
+                        <span className="text-lg opacity-70 mb-1">/ {habits.length}</span>
+                    </div>
+                    <p className="text-sm font-medium opacity-90">Habits Completed</p>
+
+                    <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-white/90 transition-all duration-500 ease-out"
+                            style={{ width: `${habits.length ? (completions.filter(c => c.date === format(selectedDate, 'yyyy-MM-dd')).length / habits.length) * 100 : 0}%` }}
+                        />
+                    </div>
                 </div>
+            </div>
+
+            {/* RIGHT: Habit List for Selected Date */}
+            <div className="flex-1 space-y-6">
+                <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-neutral-100 dark:border-slate-700 sticky top-4 z-20">
+                    <h2 className="text-xl font-bold text-neutral-800 dark:text-white pl-2">
+                        Habits
+                    </h2>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setShowCollectionModal(true)}
+                            className="p-2.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-slate-700 text-neutral-600 dark:text-slate-300 transition-colors"
+                            title="New Collection"
+                        >
+                            <FolderPlus size={20} />
+                        </button>
+                        <button
+                            onClick={handleOpenAdd}
+                            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 font-medium"
+                        >
+                            <Plus size={20} />
+                            <span>New Habit</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    {habits.length === 0 ? (
+                        <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-neutral-200 dark:border-slate-700">
+                            <p className="text-neutral-400 dark:text-slate-500 mb-4">No habits yet.</p>
+                            <button onClick={handleOpenAdd} className="text-indigo-600 font-medium hover:underline">Create your first habit</button>
+                        </div>
+                    ) : (
+                        <>
+                            {/* 1. Unassigned Habits */}
+                            <div className="grid gap-3">
+                                {unassignedHabits.map(habit => (
+                                    <HabitCard
+                                        key={habit.id}
+                                        habit={habit}
+                                        isCompleted={isHabitCompletedToday(habit.id)}
+                                        handleToggle={() => handleToggle(habit.id)}
+                                        handleDelete={() => handleDeleteHabit(habit.id)}
+                                        handleEdit={() => openEditModal(habit)}
+                                        streak={getCompletionCount(habit.id)}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* 2. Collections */}
+                            {groupedHabits.map(col => {
+                                const isExpanded = expandedCollections.has(col.id);
+                                return (
+                                    <div key={col.id} className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden border border-neutral-100 dark:border-slate-700 transition-all">
+                                        <div
+                                            onClick={() => toggleCollection(col.id)}
+                                            className="bg-neutral-50/50 dark:bg-slate-900/50 p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-100 dark:hover:bg-slate-800 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-neutral-400 dark:text-slate-500'}`}>
+                                                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                                </div>
+                                                <Folder className={`${isExpanded ? 'text-indigo-500' : 'text-neutral-400'}`} size={20} />
+                                                <h3 className={`font-bold ${isExpanded ? 'text-neutral-800 dark:text-white' : 'text-neutral-600 dark:text-slate-400'}`}>{col.name}</h3>
+                                                <span className="text-xs font-medium bg-neutral-200 dark:bg-slate-700 px-2 py-0.5 rounded-full text-neutral-600 dark:text-slate-300">{col.habits.length}</span>
+                                            </div>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteCollection(col.id); }}
+                                                className="text-neutral-300 hover:text-red-500 p-2 transition-colors"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+
+                                        <AnimatePresence>
+                                            {isExpanded && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.2 }}
+                                                >
+                                                    <div className="p-4 grid gap-3 border-t border-neutral-100 dark:border-slate-800/50">
+                                                        {col.habits.length === 0 && <p className="text-sm text-neutral-400 italic">No habits in this collection.</p>}
+                                                        {col.habits.map(habit => (
+                                                            <HabitCard
+                                                                key={habit.id}
+                                                                habit={habit}
+                                                                isCompleted={isHabitCompletedToday(habit.id)}
+                                                                handleToggle={() => handleToggle(habit.id)}
+                                                                handleDelete={() => handleDeleteHabit(habit.id)}
+                                                                handleEdit={() => openEditModal(habit)}
+                                                                streak={getCompletionCount(habit.id)}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                );
+                            })}
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* MODALS (Simplified for brevity) */}
+            <AnimatePresence>
+                {showAddModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={closeModal}>
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                            <h2 className="text-2xl font-bold mb-6 text-neutral-800 dark:text-white">{editingHabit ? 'Edit Habit' : 'Create New Habit'}</h2>
+                            <form onSubmit={handleSaveHabit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-neutral-500 mb-1">Habit Name</label>
+                                    <input type="text" required className="w-full p-3 rounded-xl border border-neutral-200 bg-neutral-50 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" value={newHabitName} onChange={e => setNewHabitName(e.target.value)} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-neutral-500 mb-1">Goal (Days)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="number"
+                                                required
+                                                min="1"
+                                                max={getDaysInMonth(calendarMonth)}
+                                                className="w-full p-3 rounded-xl border border-neutral-200 bg-neutral-50 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                                                value={newHabitGoal}
+                                                onChange={e => setNewHabitGoal(e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewHabitGoal(getDaysInMonth(calendarMonth))}
+                                                className="px-3 py-1 bg-neutral-100 dark:bg-slate-700 rounded-xl text-xs font-bold text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                            >
+                                                MAX
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-neutral-500 mb-1">Collection</label>
+                                        <select className="w-full p-3 rounded-xl border border-neutral-200 bg-neutral-50 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" value={selectedCollection} onChange={e => setSelectedCollection(e.target.value)}>
+                                            <option value="">None</option>
+                                            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    {COLORS.map(c => (
+                                        <button key={c.id} type="button" onClick={() => setNewHabitColor(c.id)} className={`w-8 h-8 rounded-full ${c.class} ${newHabitColor === c.id ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`} />
+                                    ))}
+                                </div>
+                                <div className="flex gap-3 pt-4">
+                                    <button type="button" onClick={closeModal} className="flex-1 py-2.5 bg-neutral-100 rounded-xl font-medium text-neutral-600 hover:bg-neutral-200">Cancel</button>
+                                    <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 shadow-lg shadow-indigo-200">{editingHabit ? 'Save Changes' : 'Create'}</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showCollectionModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCollectionModal(false)}>
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                            <h2 className="text-xl font-bold mb-4 text-neutral-800 dark:text-white">New Collection</h2>
+                            <form onSubmit={handleAddCollection} className="space-y-4">
+                                <input type="text" placeholder="Collection Name" required className="w-full p-3 rounded-xl border border-neutral-200 bg-neutral-50 dark:bg-slate-900 dark:border-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} />
+                                <div className="flex gap-3 pt-2">
+                                    <button type="button" onClick={() => setShowCollectionModal(false)} className="flex-1 py-2.5 bg-neutral-100 rounded-xl font-medium text-neutral-600 hover:bg-neutral-200">Cancel</button>
+                                    <button type="submit" className="flex-1 py-2.5 bg-neutral-800 text-white rounded-xl font-medium hover:bg-neutral-900">Create</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+function HabitCard({ habit, isCompleted, handleToggle, handleDelete, handleEdit, streak }) {
+    return (
+        <div
+            onClick={handleToggle}
+            className={`
+                group relative flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer select-none
+                ${isCompleted
+                    ? `bg-${habit.color}-500 border-${habit.color}-600 text-white shadow-lg shadow-${habit.color}-500/20`
+                    : 'bg-white dark:bg-slate-800 border-neutral-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-slate-600'
+                }
+            `}
+        >
+            <div className="flex items-center gap-4">
+                <div
+                    className={`
+                        w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                        ${isCompleted ? 'bg-white/20' : `bg-${habit.color}-100 dark:bg-slate-700 text-${habit.color}-500`}
+                    `}
+                >
+                    {isCompleted ? <Check size={18} strokeWidth={3} /> : <div className={`w-3 h-3 rounded-full bg-${habit.color}-500`} />}
+                </div>
+                <div>
+                    <h3 className={`font-bold text-lg leading-tight ${isCompleted ? 'text-white' : 'text-neutral-800 dark:text-slate-200'}`}>{habit.name}</h3>
+                    <p className={`text-xs font-medium ${isCompleted ? 'text-white/80' : 'text-neutral-400'}`}>Goal: {habit.target_days} days • Completed: {streak}</p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleEdit(); }}
+                    className={`p-2 rounded-lg transition-colors ${isCompleted ? 'hover:bg-white/20 text-white' : 'hover:bg-indigo-50 text-neutral-300 hover:text-indigo-500'}`}
+                >
+                    <Edit2 size={18} />
+                </button>
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                    className={`p-2 rounded-lg transition-colors ${isCompleted ? 'hover:bg-white/20 text-white' : 'hover:bg-red-50 text-neutral-300 hover:text-red-500'}`}
+                >
+                    <Trash2 size={18} />
+                </button>
             </div>
         </div>
     );
