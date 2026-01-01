@@ -1,0 +1,1 @@
+import{j as s}from"./index-DkfBXszm.js";const u=({children:t,onClick:e,className:o="",...r})=>s.jsx("button",{onClick:e,className:`px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition-all ${o}`,...r,children:t});export{u as B};
