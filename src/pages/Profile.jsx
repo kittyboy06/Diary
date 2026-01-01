@@ -158,7 +158,7 @@ export default function Profile() {
     if (loading) return <div className="p-8 text-center text-neutral-500">{t('loading_profile')}</div>;
 
     return (
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl mx-auto px-4 md:px-8">
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-neutral-100 dark:border-slate-700 overflow-hidden transition-colors">
                 {/* Header / Cover Area */}
                 <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-500"></div>

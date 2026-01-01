@@ -126,24 +126,37 @@ export const getHabitCompletions = async (userId, startDate, endDate) => {
     return data;
 };
 
-export const getHabitStats = async (userId, startDate, endDate) => {
-    // 1. Get total number of active habits
-    const { count: totalHabits, error: countError } = await supabase
+export const getHabitStats = async (userId, startDate, endDate, collectionId = 'all') => {
+    // 1. Get relevant habits (IDs and Count)
+    let query = supabase
         .from('user_habits')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact' })
         .eq('user_id', userId);
 
-    if (countError) throw countError;
+    if (collectionId !== 'all') {
+        if (collectionId === 'unassigned') {
+            query = query.is('collection_id', null);
+        } else {
+            query = query.eq('collection_id', collectionId);
+        }
+    }
+
+    const { data: habits, count: totalHabits, error: habitsError } = await query;
+
+    if (habitsError) throw habitsError;
 
     if (totalHabits === 0) return [];
 
-    // 2. Get completions in range
+    const habitIds = habits.map(h => h.id);
+
+    // 2. Get completions in range for these habits
     const { data: completions, error: compError } = await supabase
         .from('habit_completions')
         .select('date')
         .eq('user_id', userId)
         .gte('date', startDate)
-        .lte('date', endDate);
+        .lte('date', endDate)
+        .in('habit_id', habitIds);
 
     if (compError) throw compError;
 
@@ -154,10 +167,52 @@ export const getHabitStats = async (userId, startDate, endDate) => {
     });
 
     // 4. Format for Chart
-    // We expect the caller (Home.jsx) to handle the date iteration to fill gaps if needed, 
-    // or we can return a map. Let's return a map for efficient lookups.
     return Object.entries(statsMap).map(([date, count]) => ({
         date,
         score: Math.round((count / totalHabits) * 100)
     }));
+};
+
+// --- Daily Metrics (Screen Time, etc.) ---
+
+export const getDailyMetrics = async (userId, dateStr) => {
+    // Returns metric record for a specific date
+    const { data, error } = await supabase
+        .from('daily_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', dateStr)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
+};
+
+export const getDailyMetricsRange = async (userId, startDate, endDate) => {
+    // Returns metrics for a date range
+    const { data, error } = await supabase
+        .from('daily_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+    if (error) throw error;
+    return data;
+};
+
+export const updateScreenTime = async (userId, dateStr, minutes) => {
+    // Upsert logic
+    const { data, error } = await supabase
+        .from('daily_metrics')
+        .upsert(
+            { user_id: userId, date: dateStr, screen_time_minutes: minutes },
+            { onConflict: 'user_id, date' }
+        )
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
 };

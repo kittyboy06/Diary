@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getEntries, deleteEntry, getUserPin, setUserPin, getFolders, createFolder, deleteFolder, toggleFavorite, updateEntry } from '../lib/entryService'; // We will assume getEntries filters secret ones separately if parameterized
 import { motion } from 'framer-motion';
-import { Lock, Unlock, Trash2, Key, Folder, Plus, X, Calendar, Star, Edit2 } from 'lucide-react';
+import { Lock, Unlock, Trash2, Key, Folder, Plus, X, Calendar, Star, Edit2, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import EditEntryModal from '../components/EditEntryModal';
@@ -24,6 +24,7 @@ const SecretLog = () => {
     const [selectedFolder, setSelectedFolder] = useState(location.state?.folderId || 'Uncategorized');
     const [loading, setLoading] = useState(false);
     const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Editing State
     const [editingEntry, setEditingEntry] = useState(null);
@@ -98,6 +99,7 @@ const SecretLog = () => {
                         return {
                             ...e,
                             ...updates,
+                            date: updates.date ? { toDate: () => new Date(updates.date) } : e.date,
                             folder: updates.folderId ? folders.find(f => f.id === updates.folderId) : null,
                             folderId: updates.folderId
                         };
@@ -309,7 +311,7 @@ const SecretLog = () => {
     }
 
     return (
-        <div className="space-y-8 border-t-4 border-rose-500 pt-8">
+        <div className="space-y-8 border-t-4 border-rose-500 pt-8 max-w-5xl mx-auto px-4 md:px-8">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-rose-800 dark:text-rose-400 flex items-center gap-3">
                     <Unlock size={32} />
@@ -318,6 +320,20 @@ const SecretLog = () => {
                 <button onClick={() => setIsUnlocked(false)} className="text-sm text-neutral-500 dark:text-slate-400 hover:text-neutral-800 dark:hover:text-slate-200 underline">
                     {t('lock_again')}
                 </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+                <input
+                    type="text"
+                    placeholder={t('search_placeholder')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-white dark:bg-slate-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-all placeholder-neutral-400 dark:placeholder-slate-500"
+                />
+                <div className="absolute left-3 top-3.5 text-neutral-400 dark:text-slate-500">
+                    <Search size={18} />
+                </div>
             </div>
 
             {/* Secret Folders Section */}
@@ -403,7 +419,10 @@ const SecretLog = () => {
 
             {loading && !entries.length && page === 0 ? <p className="text-neutral-500 dark:text-slate-400">Loading secrets...</p> : (
                 <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                    {entries.map((entry, index) => (
+                    {entries.filter(entry =>
+                        (entry.title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                        (entry.content?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+                    ).map((entry, index) => (
                         <motion.div
                             key={entry.id}
                             initial={{ opacity: 0, x: -20 }}

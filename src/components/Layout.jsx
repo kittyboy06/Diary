@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PenTool, Book, Lock, LogOut, User, Moon, Sun, Menu, X, Target } from 'lucide-react';
+import { Home, PenTool, Book, Lock, LogOut, User, Moon, Sun, Menu, X, Target, CheckSquare, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -70,6 +70,7 @@ const Layout = () => {
                     <NavItem to="/" icon={Home} label={t('dashboard')} onClick={closeMobileMenu} />
                     <NavItem to="/create-entry" icon={PenTool} label={t('new_entry')} onClick={closeMobileMenu} />
                     <NavItem to="/daily-log" icon={Book} label={t('daily_log')} onClick={closeMobileMenu} />
+                    <NavItem to="/todo" icon={CheckSquare} label="To-Do List" onClick={closeMobileMenu} />
                     <NavItem to="/productivity" icon={Target} label="Productivity" onClick={closeMobileMenu} />
                     <NavItem to="/secret" icon={Lock} label={t('secret_log')} onClick={closeMobileMenu} />
                     <NavItem to="/profile" icon={User} label={t('profile')} onClick={closeMobileMenu} />
@@ -111,10 +112,14 @@ const Layout = () => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 md:ml-0 p-6 md:p-12 overflow-auto relative z-0 w-full pt-20 md:pt-12">
-                <div className="max-w-5xl mx-auto">
+            <div className="flex-1 md:ml-0 overflow-auto relative z-0 w-full pt-20 md:pt-12">
+                <React.Suspense fallback={
+                    <div className="h-full w-full flex items-center justify-center">
+                        <Loader className="animate-spin text-indigo-500" size={32} />
+                    </div>
+                }>
                     <Outlet />
-                </div>
+                </React.Suspense>
             </div>
         </div>
     );

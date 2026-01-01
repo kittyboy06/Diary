@@ -63,7 +63,6 @@ export const addEntry = async (userId, entry) => {
                 image_url: entry.imageUrl,
                 is_secret: entry.isSecret,
                 mood: entry.mood,
-                habits: entry.habits,
                 user_id: userId,
                 folder_id: entry.folderId || null,
                 date: entry.date ? new Date(entry.date).toISOString() : new Date().toISOString()
@@ -175,7 +174,8 @@ export const updateEntry = async (entryId, updates) => {
     if (updates.title !== undefined) dbUpdates.title = updates.title;
     if (updates.content !== undefined) dbUpdates.content = updates.content;
     if (updates.mood !== undefined) dbUpdates.mood = updates.mood;
-    if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId || null; // Handle null explicitly
+    if (updates.folderId !== undefined) dbUpdates.folder_id = updates.folderId || null;
+    if (updates.date !== undefined) dbUpdates.date = updates.date; // Support date updates
 
     const { data, error } = await supabase
         .from(TABLE)

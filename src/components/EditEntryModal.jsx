@@ -1,18 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Folder } from 'lucide-react';
+import { X, Save, Folder, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
 
 const EditEntryModal = ({ isOpen, onClose, entry, folders, onSave }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [selectedFolderId, setSelectedFolderId] = useState('');
+    const [date, setDate] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (entry) {
             setTitle(entry.title || '');
+            setTitle(entry.title || '');
             setContent(entry.content || '');
             setSelectedFolderId(entry.folderId || '');
+            // Handle date: check if it has toDate() (from service) or is a string/date object
+            let d = new Date();
+            if (entry.date) {
+                if (typeof entry.date.toDate === 'function') {
+                    d = entry.date.toDate();
+                } else {
+                    d = new Date(entry.date);
+                }
+            }
+            setDate(format(d, 'yyyy-MM-dd'));
         }
     }, [entry]);
 
@@ -20,10 +33,29 @@ const EditEntryModal = ({ isOpen, onClose, entry, folders, onSave }) => {
         e.preventDefault();
         setIsSaving(true);
         try {
+            let finalDate = new Date();
+            // Try to preserve original time
+            if (entry.date) {
+                const originalDate = typeof entry.date.toDate === 'function' ? entry.date.toDate() : new Date(entry.date);
+                // Check if originalDate is valid
+                if (!isNaN(originalDate.getTime())) {
+                    finalDate = new Date(originalDate);
+                }
+            }
+
+            // Apply new YMD from picker
+            if (date) {
+                const [y, m, d] = date.split('-').map(Number);
+                finalDate.setFullYear(y);
+                finalDate.setMonth(m - 1);
+                finalDate.setDate(d);
+            }
+
             await onSave(entry.id, {
                 title,
                 content,
-                folderId: selectedFolderId === '' ? null : selectedFolderId
+                folderId: selectedFolderId === '' ? null : selectedFolderId,
+                date: finalDate.toISOString()
             });
             onClose();
         } catch (error) {
@@ -69,8 +101,20 @@ const EditEntryModal = ({ isOpen, onClose, entry, folders, onSave }) => {
                             />
                         </div>
 
-                        {/* Folder Selection */}
-                        <div className="flex items-center gap-2">
+                        {/* Folder Selection & Date Picker */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Date Picker */}
+                            <div className="relative">
+                                <input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    className="pl-9 pr-4 py-2 rounded-xl border border-neutral-200 dark:border-slate-700 bg-neutral-50 dark:bg-slate-900/50 text-sm font-medium text-neutral-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                                />
+                                <Calendar size={16} className="absolute left-3 top-2.5 text-neutral-400 pointer-events-none" />
+                            </div>
+
+                            {/* Folder Picker */}
                             <div className="relative">
                                 <select
                                     value={selectedFolderId}

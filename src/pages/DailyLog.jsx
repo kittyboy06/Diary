@@ -140,6 +140,7 @@ const DailyLog = () => {
                         return {
                             ...e,
                             ...updates,
+                            date: updates.date ? { toDate: () => new Date(updates.date) } : e.date,
                             folder: updates.folderId ? folders.find(f => f.id === updates.folderId) : null,
                             folderId: updates.folderId
                         };
@@ -237,7 +238,7 @@ const DailyLog = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-5xl mx-auto px-4 md:px-8">
             <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4 mb-2">
                 <h1 className="text-3xl font-bold text-neutral-800 dark:text-white">{t('daily_log')}</h1>
 

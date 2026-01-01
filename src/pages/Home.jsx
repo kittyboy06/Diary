@@ -1,24 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { format, subDays } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+import { format, subDays, isToday, isTomorrow, isPast } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
 import { getEntryStats, getEntries } from '../lib/entryService';
-import { getHabitStats, getHabits, getHabitCompletions, toggleHabitCompletion } from '../lib/habitService';
-import { Sun, CheckCircle, Flame, Target } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
+import { getUpcomingTodos } from '../lib/todoService';
+import { Sun, CheckCircle, Flame, AlertCircle, Clock } from 'lucide-react';
+
 import { toast } from 'sonner';
 
 const Home = () => {
     const { currentUser } = useAuth();
     const { t } = useLanguage();
     const [stats, setStats] = useState({ streak: 0, totalEntries: 0 });
-    const [chartData, setChartData] = useState([]);
-
-    // Habits State
-    const [habits, setHabits] = useState([]);
-    const [todayCompletions, setTodayCompletions] = useState([]);
+    const [deadlines, setDeadlines] = useState([]);
 
     useEffect(() => {
         if (currentUser?.id) {
@@ -26,56 +22,14 @@ const Home = () => {
                 const statsData = await getEntryStats(currentUser.id);
                 setStats(statsData);
 
-                // Fetch Habit Data
-                const endDate = new Date();
-                const startDate = subDays(endDate, 14);
-                const endDateStr = format(endDate, 'yyyy-MM-dd');
-
-                const [habitStats, habitsList, completions] = await Promise.all([
-                    getHabitStats(currentUser.id, format(startDate, 'yyyy-MM-dd'), endDateStr),
-                    getHabits(currentUser.id),
-                    getHabitCompletions(currentUser.id, endDateStr, endDateStr) // Just for today
-                ]);
-
-                setHabits(habitsList || []);
-                setTodayCompletions(completions || []);
-
-                const processedData = Array.from({ length: 14 }).map((_, i) => {
-                    const date = subDays(new Date(), 13 - i);
-                    const dateStr = format(date, 'yyyy-MM-dd');
-                    const stat = habitStats.find(s => s.date === dateStr);
-
-                    return {
-                        date: format(date, 'dd MMM'),
-                        score: stat ? stat.score : 0
-                    };
-                });
-                setChartData(processedData);
+                const upcoming = await getUpcomingTodos(currentUser.id, 4);
+                setDeadlines(upcoming || []);
             };
             fetchData();
         }
     }, [currentUser]);
 
-    const handleToggleHabit = async (habitId) => {
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
 
-        // Optimistic UI
-        const isCompleted = todayCompletions.some(c => c.habit_id === habitId);
-        let newCompletions;
-        if (isCompleted) {
-            newCompletions = todayCompletions.filter(c => c.habit_id !== habitId);
-        } else {
-            newCompletions = [...todayCompletions, { habit_id: habitId, date: todayStr }];
-        }
-        setTodayCompletions(newCompletions);
-
-        try {
-            await toggleHabitCompletion(currentUser.id, habitId, todayStr);
-        } catch (error) {
-            toast.error("Failed to update habit");
-            // Revert on error could be added here
-        }
-    };
 
     // Placeholder greeting logic
     const hour = new Date().getHours();
@@ -83,16 +37,44 @@ const Home = () => {
     const greeting = t(greetingKey);
 
     const QUOTES = [
-        { text: "If you don't fight, you can't win!", author: "Eren Yeager (Attack on Titan)" },
-        { text: "The only thing we're allowed to do is believe that we won't regret the choice we made.", author: "Levi Ackerman" },
-        { text: "Motivation is what gets you started. Habit is what keeps you going.", author: "Jim Ryun" },
-        { text: "Do something today that your future self will thank you for.", author: "Unknown" }
+        { text: "If you win, you live. If you lose, you die. If you don't fight, you can't win!", author: "Eren Yeager (Attack on Titan)" },
+        { text: "This world is cruel... but it's also very beautiful.", author: "Mikasa Ackerman" },
+        { text: "My soldiers, rage! My soldiers, scream! My soldiers, fight!", author: "Erwin Smith" },
+        { text: "The only thing we're allowed to do is to believe that we won't regret the choice we made.", author: "Levi Ackerman" },
+        { text: "Someone who can't sacrifice anything, can't ever change anything.", author: "Armin Arlert" },
+        { text: "Hard work is worthless for those that don't believe in themselves.", author: "Naruto Uzumaki" },
+        { text: "The moment people come to know love, they run the risk of carrying hate.", author: "Obito Uchiha" },
+        { text: "It is foolish to fear what we have yet to see and know.", author: "Itachi Uchiha" },
+        { text: "Knowing what it feels to be in pain, is exactly why we try to be kind to others.", author: "Jiraiya" },
+        { text: "A dropout will beat a genius through hard work.", author: "Rock Lee" },
+        { text: "I am the man who will become the King of the Pirates!", author: "Monkey D. Luffy" },
+        { text: "When do you think people die? When they are forgotten.", author: "Dr. Hiriluk" },
+        { text: "Scars on the back are a swordsman's shame.", author: "Roronoa Zoro" },
+        { text: "Pirates are evil? The Marines are righteous? Justice will prevail, you say? But of course it will! Whoever wins this war becomes justice!", author: "Donquixote Doflamingo" },
+        { text: "No matter how hard or impossible it is, never lose sight of your goal.", author: "Monkey D. Luffy" },
+        { text: "It's fine now. Why? Because I am here!", author: "All Might" },
+        { text: "Giving help that's not asked for... is what makes a true hero!", author: "Izuku Midoriya" },
+        { text: "Stop talking. I will win. That’s... what heroes do.", author: "Katsuki Bakugo" },
+        { text: "If you wanna stop this, then stand up! Because I've got one thing to say to you. Never forget who you want to become!", author: "Shoto Todoroki" },
+        { text: "Go beyond! PLUS... ULTRA!", author: "All Might" },
+        { text: "If I don't wield the sword, I can't protect you. If I keep wielding the sword, I can't embrace you.", author: "Ichigo Kurosaki" },
+        { text: "Admiration is the furthest thing from understanding.", author: "Sōsuke Aizen" },
+        { text: "I loathe perfection! If something is perfect, then there is nothing left.", author: "Mayuri Kurotsuchi" },
+        { text: "Fear is necessary for evolution. The fear that one could be destroyed at any moment.", author: "Sōsuke Aizen" },
+        { text: "It’s meaningless to just live, and it’s meaningless to just fight. I want to win.", author: "Ichigo Kurosaki" }
     ];
 
-    const [randomQuote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
+    const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentQuoteIndex((prev) => (prev + 1) % QUOTES.length);
+        }, 15000); // Change quote every 15 seconds
+        return () => clearInterval(timer);
+    }, []);
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 max-w-7xl mx-auto px-4 md:px-8 py-8">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -106,10 +88,24 @@ const Home = () => {
                     <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
                         {greeting}, {currentUser?.user_metadata?.username || currentUser?.user_metadata?.full_name || 'Friend'}!
                     </h1>
-                    <p className="text-lg opacity-90 max-w-2xl italic">
-                        "{randomQuote.text}"
-                        <br /><span className="text-sm opacity-75 mt-2 block not-italic">— {randomQuote.author}</span>
-                    </p>
+
+                    <div className="min-h-[6rem] flex items-center">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={currentQuoteIndex}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.5 }}
+                                className="w-full"
+                            >
+                                <p className="text-lg opacity-90 max-w-2xl italic">
+                                    "{QUOTES[currentQuoteIndex].text}"
+                                    <br /><span className="text-sm opacity-75 mt-2 block not-italic">— {QUOTES[currentQuoteIndex].author}</span>
+                                </p>
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
                 </div>
                 {/* Decorative circles */}
                 <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl"></div>
@@ -150,100 +146,44 @@ const Home = () => {
                     <p className="text-sm text-neutral-500 dark:text-slate-400 mt-1">{t('total_written')}</p>
                 </motion.div>
 
-                {/* Today's Focus Widget */}
+
+
+
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.3 }}
-                    className="md:col-span-2 lg:col-span-1 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-neutral-100 dark:border-slate-700"
+                    className="md:col-span-2 lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-neutral-100 dark:border-slate-700"
                 >
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-lg text-neutral-800 dark:text-white">Today's Focus</h3>
-                        <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-full text-indigo-600 dark:text-indigo-400">
-                            <Target size={20} />
+                        <h3 className="font-semibold text-lg text-neutral-800 dark:text-white">Upcoming Deadlines</h3>
+                        <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full text-amber-600 dark:text-amber-400">
+                            <Clock size={20} />
                         </div>
                     </div>
 
-                    <div className="space-y-3 max-h-[200px] overflow-y-auto scrollbar-hide">
-                        {habits.length === 0 ? (
-                            <p className="text-sm text-neutral-400 italic">No habits set. Go to Productivity to add one!</p>
+                    <div className="space-y-3">
+                        {deadlines.length === 0 ? (
+                            <p className="text-sm text-neutral-400 italic">No upcoming deadlines.</p>
                         ) : (
-                            habits.slice(0, 5).map(habit => {
-                                const isCompleted = todayCompletions.some(c => c.habit_id === habit.id);
+                            deadlines.map(todo => {
+                                const date = new Date(todo.deadline);
+                                const isOverdue = isPast(date) && !isToday(date);
                                 return (
-                                    <div
-                                        key={habit.id}
-                                        onClick={() => handleToggleHabit(habit.id)}
-                                        className={`
-                                            flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer group
-                                            ${isCompleted
-                                                ? `bg-${habit.color}-500 border-${habit.color}-500 text-white`
-                                                : 'bg-neutral-50 dark:bg-slate-900/50 border-neutral-100 dark:border-slate-700 hover:border-indigo-300'
-                                            }
-                                        `}
-                                    >
-                                        <span className="font-medium text-sm truncate max-w-[150px]">{habit.habit_collections?.name || habit.name}</span>
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isCompleted ? 'border-white bg-white/20' : `border-${habit.color}-400 group-hover:bg-${habit.color}-100`}`}>
-                                            {isCompleted && <CheckCircle size={12} fill="currentColor" />}
+                                    <div key={todo.id} className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50 dark:bg-slate-900/50 border border-neutral-100 dark:border-slate-700">
+                                        <div className={`p-1.5 rounded-full ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                            <AlertCircle size={14} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-neutral-800 dark:text-slate-200 truncate">{todo.text}</p>
+                                            <p className={`text-xs ${isOverdue ? 'text-red-500 font-medium' : 'text-neutral-400'}`}>
+                                                {isToday(date) ? 'Due Today' : isTomorrow(date) ? 'Due Tomorrow' : format(date, 'MMM d, h:mm a')}
+                                            </p>
                                         </div>
                                     </div>
-                                )
+                                );
                             })
                         )}
-                        {habits.length > 5 && (
-                            <p className="text-xs text-center text-neutral-400">...and {habits.length - 5} more</p>
-                        )}
-                    </div>
-                </motion.div>
-
-                {/* Productivity Chart Widget */}
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="md:col-span-2 lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-neutral-100 dark:border-slate-700"
-                >
-                    <div className="flex items-center gap-2 mb-4">
-                        <h3 className="font-semibold text-lg text-neutral-800 dark:text-white">Productivity Trend</h3>
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">Last 14 Days</span>
-                    </div>
-                    <div className="h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData}>
-                                <defs>
-                                    <linearGradient id="colorScoreHome" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis
-                                    dataKey="date"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                                    dy={10}
-                                />
-                                <YAxis hide domain={[0, 100]} />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: '#1e293b',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                    formatter={(value) => [`${Math.round(value)}%`, 'Completion']}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="score"
-                                    stroke="#818cf8"
-                                    strokeWidth={3}
-                                    fillOpacity={1}
-                                    fill="url(#colorScoreHome)"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
                     </div>
                 </motion.div>
             </div>
