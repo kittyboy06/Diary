@@ -14,7 +14,7 @@ echo Committing...
 git commit -m "Deploy from manual script"
 
 echo Pushing to GitHub...
-git push -f https://github.com/kittyboy06/Dairy.git gh-pages
+git push -f https://github.com/kittyboy06/Diary.git gh-pages
 
 cd ..
 echo Deployment Complete!

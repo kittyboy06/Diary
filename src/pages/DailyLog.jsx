@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Trash2, Lock, Calendar, Search, Filter, Folder, Plus, X, Star, Edit2 } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
-import CreateEntryButton from '../components/CreateEntryButton';
+
 import EditEntryModal from '../components/EditEntryModal';
 import SecureImage from '../components/SecureImage';
 import { toast } from 'sonner';

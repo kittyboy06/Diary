@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+
+# abort on errors
+set -e
+
+# build
+echo "Building project..."
+npm run build
+
+# navigate into the build output directory
+cd dist
+
+# place .nojekyll to bypass Jekyll processing
+echo > .nojekyll
+
+echo "Initializing temporary git repo..."
+git init
+git checkout -B gh-pages
+
+echo "Adding files..."
+git add -A
+
+echo "Committing..."
+git commit -m "Deploy from manual script"
+
+echo "Pushing to GitHub..."
+git push -f https://github.com/kittyboy06/Diary.git gh-pages
+
+cd ..
+echo "Deployment Complete!"
