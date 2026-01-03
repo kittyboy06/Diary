@@ -8,6 +8,7 @@ import { Lock, Unlock, Trash2, Key, Folder, Plus, X, Calendar, Star, Edit2, Sear
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import EditEntryModal from '../components/EditEntryModal';
+import SecureImage from '../components/SecureImage';
 
 const SecretLog = () => {
     const { currentUser, signIn } = useAuth();
@@ -491,7 +492,7 @@ const SecretLog = () => {
                             </div>
                             {entry.imageUrl && (
                                 <div className="mt-4 rounded-lg overflow-hidden h-40 w-full bg-rose-100 dark:bg-slate-900 shrink-0">
-                                    <img src={entry.imageUrl} alt="Secret info" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity" />
+                                    <SecureImage path={entry.imageUrl} alt="Secret info" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity" />
                                 </div>
                             )}
                         </motion.div>

@@ -7,7 +7,9 @@ import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Trash2, Lock, Calendar, Search, Filter, Folder, Plus, X, Star, Edit2 } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
+import CreateEntryButton from '../components/CreateEntryButton';
 import EditEntryModal from '../components/EditEntryModal';
+import SecureImage from '../components/SecureImage';
 import { toast } from 'sonner';
 
 const DailyLog = () => {
@@ -452,7 +454,7 @@ const DailyLog = () => {
                             {
                                 entry.imageUrl && (
                                     <div className="mt-4 rounded-xl overflow-hidden h-40 w-full bg-neutral-100 dark:bg-slate-900 shrink-0">
-                                        <img src={entry.imageUrl} alt="Entry attachment" className="w-full h-full object-cover" />
+                                        <SecureImage path={entry.imageUrl} alt="Entry attachment" className="w-full h-full object-cover" />
                                     </div>
                                 )
                             }

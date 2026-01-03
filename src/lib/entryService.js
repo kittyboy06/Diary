@@ -152,11 +152,29 @@ export const uploadImage = async (file, userId) => {
 
     if (error) throw error;
 
-    const { data } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(fileName);
+    return fileName; // Return path, not public URL
+};
 
-    return data.publicUrl;
+export const getSecureImageUrl = async (path) => {
+    if (!path) return null;
+    // Handle specific case where full legacy URL is stored
+    const legacyPrefix = '/storage/v1/object/public/images/';
+    let cleanPath = path;
+    if (path.includes(legacyPrefix)) {
+        cleanPath = path.split(legacyPrefix)[1];
+    }
+    // Also handle if full URL is passed but it's not our Supabase
+    if (path.startsWith('http') && !path.includes('supabase')) return path;
+
+    const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(cleanPath, 3600); // Valid for 1 hour
+
+    if (error) {
+        console.warn("Error signing URL:", error);
+        return null;
+    }
+    return data.signedUrl;
 };
 
 export const toggleFavorite = async (entryId, isFavorite) => {
